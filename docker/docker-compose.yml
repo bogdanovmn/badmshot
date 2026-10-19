@@ -1,0 +1,27 @@
+services:
+  bs-app:
+    build: .
+    image: badmshot:${BACKEND_VERSION:-latest}
+    container_name: badmshot-container
+    ports:
+      - "8086:8080"
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Moscow
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://shared-db:5432/badmshot
+      - SPRING_PROFILES_ACTIVE=prod
+      - OUTPUT=file
+      - BADMSHOT_ARCHIVE_DIR=/archive
+      - JAVA_OPTS=-Xmx384m -Xmn128m -XX:MaxMetaspaceSize=96m -XX:CompressedClassSpaceSize=16m -Xss512k -XX:ReservedCodeCacheSize=32M -XX:MaxDirectMemorySize=64m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -XX:+UseCodeCacheFlushing
+    volumes:
+      - /var/log/badmshot:/app/logs
+      - /home/backend/auth-service/jwt:/app/jwt
+      - /home/backend/badminton-archive:/archive
+    networks:
+      - shared-network
+
+networks:
+  shared-network:
+    external: true
+    name: docker_shared-network

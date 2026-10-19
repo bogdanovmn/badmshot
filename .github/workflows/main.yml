@@ -1,0 +1,13 @@
+name: Deploy Backend
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  call-shared-deploy:
+    uses: bogdanovmn/github-actions/.github/workflows/deploy-java.yml@master
+    with:
+      service_name: "badmshot"
+    secrets:
+      SSH_CONFIG_JSON: ${{ secrets.SSH_CONFIG_JSON }}

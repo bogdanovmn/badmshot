@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="001-extensions-and-users" author="badmshot">
+        <sql>
+            CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+            CREATE TABLE app_user (
+                id uuid PRIMARY KEY,
+                display_name varchar(100) NOT NULL
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="002-dictionaries" author="badmshot">
+        <sql>
+            CREATE TABLE club (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                name varchar(200) NOT NULL UNIQUE,
+                search_vector tsvector GENERATED ALWAYS AS (
+                    to_tsvector('simple'::regconfig, coalesce(name, ''))
+                ) STORED
+            );
+            CREATE INDEX club_search_vector_idx ON club USING gin (search_vector);
+
+            CREATE TABLE player (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                name varchar(200) NOT NULL UNIQUE,
+                display_name varchar(200),
+                tournament_alias varchar(200),
+                search_vector tsvector GENERATED ALWAYS AS (
+                    to_tsvector('simple'::regconfig,
+                        coalesce(name, '') || ' ' || coalesce(display_name, '')
+                    )
+                ) STORED
+            );
+            CREATE INDEX player_search_vector_idx ON player USING gin (search_vector);
+        </sql>
+    </changeSet>
+
+    <changeSet id="003-matches" author="badmshot">
+        <sql>
+            CREATE TABLE match (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                rel_path varchar(1000) NOT NULL UNIQUE,
+                year smallint,
+                month smallint,
+                match_date date,
+                club_id uuid REFERENCES club(id),
+                tournament boolean NOT NULL DEFAULT false,
+                duration_seconds integer,
+                size_mbytes integer NOT NULL,
+                validation_error text,
+                indexed_at timestamp NOT NULL DEFAULT now()
+            );
+            CREATE INDEX match_year_month_idx ON match (year, month);
+            CREATE INDEX match_club_idx ON match (club_id);
+            CREATE INDEX match_date_idx ON match (match_date);
+
+            CREATE TABLE match_player (
+                match_id uuid NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+                player_id uuid NOT NULL REFERENCES player(id),
+                position smallint NOT NULL,
+                PRIMARY KEY (match_id, position)
+            );
+            CREATE INDEX match_player_player_idx ON match_player (player_id);
+        </sql>
+    </changeSet>
+
+    <changeSet id="004-screenshots" author="badmshot">
+        <sql>
+            CREATE TABLE screenshot (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                match_id uuid NOT NULL REFERENCES match(id) ON DELETE CASCADE,
+                timecode_seconds integer NOT NULL,
+                image bytea NOT NULL,
+                image_format varchar(10) NOT NULL,
+                width integer NOT NULL,
+                height integer NOT NULL,
+                created_at timestamp NOT NULL DEFAULT now()
+            );
+            CREATE INDEX screenshot_match_idx ON screenshot (match_id);
+
+            CREATE TABLE screenshot_like (
+                screenshot_id uuid NOT NULL REFERENCES screenshot(id) ON DELETE CASCADE,
+                user_id uuid NOT NULL REFERENCES app_user(id),
+                created_at timestamp NOT NULL DEFAULT now(),
+                PRIMARY KEY (screenshot_id, user_id)
+            );
+            CREATE INDEX screenshot_like_user_idx ON screenshot_like (user_id);
+            CREATE INDEX screenshot_like_screenshot_idx ON screenshot_like (screenshot_id);
+        </sql>
+    </changeSet>
+
+    <changeSet id="005-jobs" author="badmshot">
+        <sql>
+            CREATE TABLE job (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                type varchar(50) NOT NULL,
+                status varchar(20) NOT NULL,
+                phase varchar(20),
+                params jsonb,
+                total_files integer NOT NULL DEFAULT 0,
+                processed_files integer NOT NULL DEFAULT 0,
+                screenshots_created integer NOT NULL DEFAULT 0,
+                cancel_requested boolean NOT NULL DEFAULT false,
+                error text,
+                started_at timestamp NOT NULL DEFAULT now(),
+                last_activity_at timestamp NOT NULL DEFAULT now(),
+                finished_at timestamp
+            );
+            CREATE INDEX job_type_status_idx ON job (type, status);
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

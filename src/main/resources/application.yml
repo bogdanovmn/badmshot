@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: badmshot
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://hserver2:5432/badmshot}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+security.roles.application-id-prefix: badmshot
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:}
+
+badmshot:
+  archive-dir: ${BADMSHOT_ARCHIVE_DIR:}
+  video:
+    player: ${BADMSHOT_VIDEO_PLAYER:ffmpeg}
+    player-path: ${BADMSHOT_VIDEO_PLAYER_PATH:ffmpeg}
+    ffprobe-path: ${BADMSHOT_FFPROBE_PATH:ffprobe}
+  index:
+    screenshots-count: 12
+    margin-seconds: 30
+    reduce-factor: 2
+    format: jpeg
+    quality: 80
+    threads: 2
+    player: ${BADMSHOT_INDEX_PLAYER:ffmpeg}
+  image:
+    default-width: 640
+    max-width: 1920
+    jpeg-quality: 0.85
+  job:
+    stale-timeout-seconds: 60
+    heartbeat-seconds: 5
+  rate-limit:
+    min-seconds-between-frames: 3
+    free-frames: 3
+  top-frames-limit: 20
+  filters:
+    limit: 50
+
+server:
+  port: 8080
+
+management:
+  endpoints.web.exposure.include: prometheus, health, metrics
+  prometheus.metrics.export.enabled: 'true'
+  metrics:
+    enable:
+      jvm: 'true'
+      percentiles-histogram:
+        http.server.requests: 'true'
