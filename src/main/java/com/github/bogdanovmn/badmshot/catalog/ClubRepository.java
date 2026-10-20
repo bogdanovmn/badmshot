@@ -86,6 +86,37 @@ public class ClubRepository {
         );
     }
 
+    public List<Club> byIds(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT id, name
+                FROM club
+                WHERE id IN (:ids)
+                ORDER BY name
+                """,
+            Map.of("ids", ids),
+            CLUB_ROW_MAPPER
+        );
+    }
+
+    public List<CatalogTag> tags() {
+        return jdbc.query("""
+                SELECT c.id, c.name AS label, count(m.id) AS matches
+                FROM club c
+                JOIN match m ON m.club_id = c.id
+                GROUP BY c.id, c.name
+                ORDER BY matches DESC, label
+                """,
+            (rs, rowNum) -> CatalogTag.builder()
+                .id(UUID.fromString(rs.getString("id")))
+                .label(rs.getString("label"))
+                .matches(rs.getLong("matches"))
+                .build()
+        );
+    }
+
     public List<UUID> existingIds(List<UUID> ids) {
         if (ids.isEmpty()) {
             return new ArrayList<>();

@@ -30,9 +30,11 @@ class ScreenshotController {
     @GetMapping("/random")
     ScreenshotCard random(
         @RequestParam(name = "players", required = false) List<UUID> players,
-        @RequestParam(name = "clubs", required = false) List<UUID> clubs
+        @RequestParam(name = "clubs", required = false) List<UUID> clubs,
+        @RequestParam(name = "excludeMatchId", required = false) UUID excludeMatchId,
+        @RequestParam(name = "excludeClubId", required = false) UUID excludeClubId
     ) {
-        return screenshotService.random(filter(players, clubs), null);
+        return screenshotService.random(filter(players, clubs), null, excludeMatchId, excludeClubId);
     }
 
     @GetMapping("/top")
@@ -55,12 +57,14 @@ class ScreenshotController {
     ScreenshotCard next(
         @CurrentUserId UUID userId,
         @RequestParam(name = "players", required = false) List<UUID> players,
-        @RequestParam(name = "clubs", required = false) List<UUID> clubs
+        @RequestParam(name = "clubs", required = false) List<UUID> clubs,
+        @RequestParam(name = "excludeMatchId", required = false) UUID excludeMatchId,
+        @RequestParam(name = "excludeClubId", required = false) UUID excludeClubId
     ) {
         if (!frameRateLimit.allow(userId)) {
             throw new TooManyRequestsException("Слишком часто. Подождите несколько секунд.");
         }
-        return screenshotService.random(filter(players, clubs), userId);
+        return screenshotService.random(filter(players, clubs), userId, excludeMatchId, excludeClubId);
     }
 
     @GetMapping("/liked")

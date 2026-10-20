@@ -36,4 +36,14 @@ class FilterController {
     ) {
         return playerRepository.search(term, clubId, limit);
     }
+
+    @GetMapping("/clubs/by-ids")
+    List<Club> clubsByIds(@RequestParam(name = "ids", required = false) List<UUID> ids) {
+        return ids == null ? List.of() : clubRepository.byIds(ids);
+    }
+
+    @GetMapping("/players/by-ids")
+    List<Player> playersByIds(@RequestParam(name = "ids", required = false) List<UUID> ids) {
+        return ids == null ? List.of() : playerRepository.byIds(ids);
+    }
 }

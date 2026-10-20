@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -142,7 +143,12 @@ public class ScreenshotRepository {
         ).stream().findFirst();
     }
 
-    public Optional<ScreenshotCard> randomCard(ScreenshotFilter filter, UUID userId) {
+    public Optional<ScreenshotCard> randomCard(
+        ScreenshotFilter filter,
+        UUID userId,
+        UUID excludeMatchId,
+        UUID excludeClubId
+    ) {
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("userId", userId)
             .addValue("limit", 1);
@@ -151,10 +157,26 @@ public class ScreenshotRepository {
         sql.append("""
 
             GROUP BY s.id, m.id, c.id
-            ORDER BY random()
-            LIMIT :limit
+            """);
+        sql.append(randomOrder(params, excludeMatchId, excludeClubId));
+        sql.append("""
+             LIMIT :limit
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER).stream().findFirst();
+    }
+
+    private String randomOrder(MapSqlParameterSource params, UUID excludeMatchId, UUID excludeClubId) {
+        List<String> keys = new ArrayList<>();
+        if (excludeClubId != null) {
+            params.addValue("excludeClubId", excludeClubId);
+            keys.add("(m.club_id IS NOT DISTINCT FROM :excludeClubId)");
+        }
+        if (excludeMatchId != null) {
+            params.addValue("excludeMatchId", excludeMatchId);
+            keys.add("(m.id = :excludeMatchId)");
+        }
+        keys.add("random()");
+        return " ORDER BY " + String.join(", ", keys);
     }
 
     public List<ScreenshotCard> topCards(UUID userId, int limit) {

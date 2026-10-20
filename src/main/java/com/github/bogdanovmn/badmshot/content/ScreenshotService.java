@@ -21,8 +21,8 @@ class ScreenshotService {
     private int topFramesLimit;
 
     @Transactional(readOnly = true)
-    ScreenshotCard random(ScreenshotFilter filter, UUID userId) {
-        return screenshotRepository.randomCard(filter, userIdOrAnonymous(userId))
+    ScreenshotCard random(ScreenshotFilter filter, UUID userId, UUID excludeMatchId, UUID excludeClubId) {
+        return screenshotRepository.randomCard(filter, userIdOrAnonymous(userId), excludeMatchId, excludeClubId)
             .orElseThrow(() -> new NoSuchElementException("Кадры не найдены"));
     }
 

@@ -102,6 +102,24 @@ public class PlayerRepository {
         );
     }
 
+    public List<CatalogTag> tags() {
+        return jdbc.query("""
+                SELECT p.id,
+                       coalesce(nullif(p.display_name, ''), p.name) AS label,
+                       count(DISTINCT mp.match_id) AS matches
+                FROM player p
+                JOIN match_player mp ON mp.player_id = p.id
+                GROUP BY p.id, p.name, p.display_name
+                ORDER BY matches DESC, label
+                """,
+            (rs, rowNum) -> CatalogTag.builder()
+                .id(UUID.fromString(rs.getString("id")))
+                .label(rs.getString("label"))
+                .matches(rs.getLong("matches"))
+                .build()
+        );
+    }
+
     public void update(UUID playerId, String displayName, String tournamentAlias) {
         jdbc.update("""
                 UPDATE player
