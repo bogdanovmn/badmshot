@@ -53,6 +53,7 @@ class WebSecurity {
 				.requestMatchers(HttpMethod.GET, "/filters/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/tags/**").permitAll()
 				.requestMatchers("/archive/**").hasAuthority("admin")
+				.requestMatchers("/clubs/**").hasAuthority("admin")
 				.requestMatchers("/players/**").hasAuthority("admin")
 				.requestMatchers("/actuator/**").permitAll()
 				.requestMatchers("/error").permitAll()

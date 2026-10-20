@@ -7,7 +7,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class ArchiveMonth {
+class ArchiveMonth {
     int month;
     int matches;
     int invalid;

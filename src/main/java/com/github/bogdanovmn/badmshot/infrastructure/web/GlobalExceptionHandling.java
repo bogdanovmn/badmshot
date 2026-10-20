@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 
 @ControllerAdvice
 @Slf4j
-public class GlobalExceptionHandling {
+class GlobalExceptionHandling {
 
     @ExceptionHandler(value = Exception.class)
     public ResponseEntity<ExceptionResponse> defaultError(HttpServletRequest req, Exception ex) {

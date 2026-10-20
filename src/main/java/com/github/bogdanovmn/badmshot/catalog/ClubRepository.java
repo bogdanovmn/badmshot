@@ -1,6 +1,5 @@
 package com.github.bogdanovmn.badmshot.catalog;
 
-import com.github.bogdanovmn.badmshot.common.FullTextQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -20,6 +19,7 @@ public class ClubRepository {
     private static final RowMapper<Club> CLUB_ROW_MAPPER = (rs, rowNum) -> Club.builder()
         .id(UUID.fromString(rs.getString("id")))
         .name(rs.getString("name"))
+        .displayName(rs.getString("display_name"))
         .build();
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -38,7 +38,7 @@ public class ClubRepository {
 
     public Optional<Club> findById(UUID clubId) {
         return jdbc.query("""
-                SELECT id, name
+                SELECT id, name, display_name
                 FROM club
                 WHERE id = :clubId
                 """,
@@ -47,41 +47,32 @@ public class ClubRepository {
         ).stream().findFirst();
     }
 
-    public List<Club> search(String term, UUID playerId, int limit) {
-        Optional<String> query = FullTextQuery.of(term);
-        StringBuilder sql = new StringBuilder("""
-                SELECT c.id, c.name
+    public List<Club> list(UUID playerId) {
+        if (playerId == null) {
+            return listAll();
+        }
+        return jdbc.query("""
+                SELECT c.id, c.name, c.display_name
                 FROM club c
-                WHERE 1 = 1
-                """);
-        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit);
-        query.ifPresent(q -> {
-            sql.append(" AND c.search_vector @@ to_tsquery('simple', :tsq)");
-            params.addValue("tsq", q);
-        });
-        if (playerId != null) {
-            sql.append("""
-                 AND EXISTS (
+                WHERE EXISTS (
                     SELECT 1
                     FROM match m
                     JOIN match_player mp ON mp.match_id = m.id
                     WHERE m.club_id = c.id AND mp.player_id = :playerId
-                 )
-                """);
-            params.addValue("playerId", playerId);
-        }
-        sql.append(" ORDER BY c.name LIMIT :limit");
-        return jdbc.query(sql.toString(), params, CLUB_ROW_MAPPER);
+                )
+                ORDER BY coalesce(c.display_name, c.name)
+                """,
+            Map.of("playerId", playerId),
+            CLUB_ROW_MAPPER
+        );
     }
 
-    public List<Club> listAll(int limit) {
+    public List<Club> listAll() {
         return jdbc.query("""
-                SELECT id, name
+                SELECT id, name, display_name
                 FROM club
-                ORDER BY name
-                LIMIT :limit
+                ORDER BY coalesce(display_name, name)
                 """,
-            Map.of("limit", limit),
             CLUB_ROW_MAPPER
         );
     }
@@ -91,10 +82,10 @@ public class ClubRepository {
             return List.of();
         }
         return jdbc.query("""
-                SELECT id, name
+                SELECT id, name, display_name
                 FROM club
                 WHERE id IN (:ids)
-                ORDER BY name
+                ORDER BY coalesce(display_name, name)
                 """,
             Map.of("ids", ids),
             CLUB_ROW_MAPPER
@@ -103,17 +94,29 @@ public class ClubRepository {
 
     public List<CatalogTag> tags() {
         return jdbc.query("""
-                SELECT c.id, c.name AS label, count(m.id) AS matches
+                SELECT c.id, coalesce(nullif(c.display_name, ''), c.name) AS label, count(m.id) AS matches
                 FROM club c
                 JOIN match m ON m.club_id = c.id
-                GROUP BY c.id, c.name
-                ORDER BY matches DESC, label
+                GROUP BY c.id, c.name, c.display_name
+                ORDER BY label
                 """,
             (rs, rowNum) -> CatalogTag.builder()
                 .id(UUID.fromString(rs.getString("id")))
                 .label(rs.getString("label"))
                 .matches(rs.getLong("matches"))
                 .build()
+        );
+    }
+
+    public void update(UUID clubId, String displayName) {
+        jdbc.update("""
+                UPDATE club
+                SET display_name = :displayName
+                WHERE id = :clubId
+                """,
+            new MapSqlParameterSource()
+                .addValue("clubId", clubId)
+                .addValue("displayName", displayName)
         );
     }
 

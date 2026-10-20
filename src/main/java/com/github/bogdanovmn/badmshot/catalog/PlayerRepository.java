@@ -110,7 +110,7 @@ public class PlayerRepository {
                 FROM player p
                 JOIN match_player mp ON mp.player_id = p.id
                 GROUP BY p.id, p.name, p.display_name
-                ORDER BY matches DESC, label
+                ORDER BY label
                 """,
             (rs, rowNum) -> CatalogTag.builder()
                 .id(UUID.fromString(rs.getString("id")))

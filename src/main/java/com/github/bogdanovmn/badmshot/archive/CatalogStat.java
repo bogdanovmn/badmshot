@@ -7,7 +7,7 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class CatalogStat {
+class CatalogStat {
     UUID id;
     String name;
     int matches;

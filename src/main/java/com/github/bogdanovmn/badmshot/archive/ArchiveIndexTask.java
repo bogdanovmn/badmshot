@@ -29,7 +29,7 @@ import java.util.stream.Stream;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class ArchiveIndexTask {
+class ArchiveIndexTask {
 
     private final ArchivePathParser pathParser;
     private final ClubRepository clubRepository;

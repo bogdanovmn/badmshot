@@ -7,6 +7,6 @@ import java.util.List;
 
 @Value
 @Builder
-public class MatchRename {
+class MatchRename {
     List<String> players;
 }

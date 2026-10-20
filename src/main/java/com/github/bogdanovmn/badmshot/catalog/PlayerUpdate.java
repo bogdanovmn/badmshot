@@ -5,7 +5,7 @@ import lombok.Value;
 
 @Value
 @Builder
-public class PlayerUpdate {
+class PlayerUpdate {
     String displayName;
     String tournamentAlias;
 }

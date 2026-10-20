@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
-public class JobRepository {
+class JobRepository {
 
     private static final RowMapper<Job> JOB_ROW_MAPPER = (rs, rowNum) -> Job.builder()
         .id(UUID.fromString(rs.getString("id")))

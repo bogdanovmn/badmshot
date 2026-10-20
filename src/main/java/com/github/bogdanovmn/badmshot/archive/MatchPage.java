@@ -7,7 +7,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class MatchPage {
+class MatchPage {
     int total;
     List<MatchBrief> items;
 }

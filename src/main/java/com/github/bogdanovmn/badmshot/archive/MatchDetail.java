@@ -9,7 +9,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class MatchDetail {
+class MatchDetail {
     Match match;
     List<Player> players;
     List<Screenshot> screenshots;

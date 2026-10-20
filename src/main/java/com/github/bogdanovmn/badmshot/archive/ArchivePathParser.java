@@ -9,7 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
-public class ArchivePathParser {
+class ArchivePathParser {
 
     private static final Pattern YEAR = Pattern.compile("(\\d{4})");
     private static final Pattern MONTH_DIR = Pattern.compile("(\\d{4})-(\\d{2})");

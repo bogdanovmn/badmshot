@@ -22,11 +22,8 @@ class FilterController {
     private int limit;
 
     @GetMapping("/clubs")
-    List<Club> clubs(
-        @RequestParam(name = "playerId", required = false) UUID playerId,
-        @RequestParam(name = "term", required = false) String term
-    ) {
-        return clubRepository.search(term, playerId, limit);
+    List<Club> clubs(@RequestParam(name = "playerId", required = false) UUID playerId) {
+        return clubRepository.list(playerId);
     }
 
     @GetMapping("/players")

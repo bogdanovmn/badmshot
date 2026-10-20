@@ -7,7 +7,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class ArchiveStats {
+class ArchiveStats {
     int matches;
     long sizeMbytes;
     long durationSeconds;

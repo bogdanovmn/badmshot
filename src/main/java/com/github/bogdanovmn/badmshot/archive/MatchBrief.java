@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class MatchBrief {
+class MatchBrief {
     UUID id;
     String relPath;
     Integer year;

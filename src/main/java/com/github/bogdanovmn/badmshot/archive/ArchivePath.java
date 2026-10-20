@@ -8,7 +8,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class ArchivePath {
+class ArchivePath {
     String relPath;
     Integer year;
     Integer month;

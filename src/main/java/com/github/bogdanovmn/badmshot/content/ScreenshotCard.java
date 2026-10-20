@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class ScreenshotCard {
+class ScreenshotCard {
     UUID id;
     UUID matchId;
     int timecodeSeconds;

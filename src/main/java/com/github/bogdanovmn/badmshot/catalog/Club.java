@@ -7,7 +7,12 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class Club {
+class Club {
     UUID id;
     String name;
+    String displayName;
+
+    public String getDisplayLabel() {
+        return displayName == null || displayName.isBlank() ? name : displayName;
+    }
 }

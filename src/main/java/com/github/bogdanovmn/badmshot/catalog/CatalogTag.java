@@ -7,7 +7,7 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class CatalogTag {
+class CatalogTag {
     UUID id;
     String label;
     long matches;

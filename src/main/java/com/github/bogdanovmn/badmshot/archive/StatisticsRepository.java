@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
-public class StatisticsRepository {
+class StatisticsRepository {
 
     private static final RowMapper<CatalogStat> CATALOG_STAT_ROW_MAPPER = (rs, rowNum) -> CatalogStat.builder()
         .id(UUID.fromString(rs.getString("id")))
@@ -64,14 +64,14 @@ public class StatisticsRepository {
         );
 
         List<CatalogStat> clubs = jdbc.query("""
-                SELECT c.id, c.name, count(*) AS matches,
+                SELECT c.id, coalesce(c.display_name, c.name) AS name, count(*) AS matches,
                        coalesce(sum(m.size_mbytes), 0) AS size_mbytes,
                        coalesce(sum(m.duration_seconds), 0) AS duration_seconds
                 FROM match m
                 JOIN club c ON c.id = m.club_id
                 WHERE m.validation_error IS NULL
-                GROUP BY c.id, c.name
-                ORDER BY matches DESC, c.name
+                GROUP BY c.id, c.name, c.display_name
+                ORDER BY matches DESC, name
                 """,
             Map.of(),
             CATALOG_STAT_ROW_MAPPER

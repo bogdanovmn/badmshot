@@ -5,7 +5,7 @@ import lombok.Value;
 
 @Value
 @Builder
-public class ArchiveMonthStat {
+class ArchiveMonthStat {
     int month;
     int matches;
     long sizeMbytes;

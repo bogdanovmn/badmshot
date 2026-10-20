@@ -54,7 +54,7 @@ public class ScreenshotRepository {
     private static final String CARD_SELECT = """
         SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.created_at,
                m.year, m.month, m.match_date, m.tournament, m.club_id,
-               c.name AS club_name,
+               coalesce(c.display_name, c.name) AS club_name,
                (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) AS likes,
                EXISTS (
                    SELECT 1 FROM screenshot_like l2

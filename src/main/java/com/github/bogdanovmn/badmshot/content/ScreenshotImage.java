@@ -5,7 +5,7 @@ import lombok.Value;
 
 @Value
 @Builder
-public class ScreenshotImage {
+class ScreenshotImage {
     byte[] data;
     String format;
     int width;

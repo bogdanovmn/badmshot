@@ -21,11 +21,8 @@
             CREATE TABLE club (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 name varchar(200) NOT NULL UNIQUE,
-                search_vector tsvector GENERATED ALWAYS AS (
-                    to_tsvector('simple'::regconfig, coalesce(name, ''))
-                ) STORED
+                display_name varchar(200)
             );
-            CREATE INDEX club_search_vector_idx ON club USING gin (search_vector);
 
             CREATE TABLE player (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

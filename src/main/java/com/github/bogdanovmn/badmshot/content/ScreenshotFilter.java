@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Value
 @Builder
-public class ScreenshotFilter {
+class ScreenshotFilter {
     List<UUID> players;
     List<UUID> clubs;
 

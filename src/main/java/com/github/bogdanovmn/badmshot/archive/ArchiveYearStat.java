@@ -7,7 +7,7 @@ import java.util.List;
 
 @Value
 @Builder
-public class ArchiveYearStat {
+class ArchiveYearStat {
     int year;
     int matches;
     long sizeMbytes;

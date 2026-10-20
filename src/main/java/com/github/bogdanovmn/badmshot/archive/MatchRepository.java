@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
-public class MatchRepository {
+class MatchRepository {
 
     private static final RowMapper<Match> MATCH_ROW_MAPPER = (rs, rowNum) -> Match.builder()
         .id(UUID.fromString(rs.getString("id")))
@@ -56,7 +56,7 @@ public class MatchRepository {
     private static final String BRIEF_SELECT = """
         SELECT m.id, m.rel_path, m.year, m.month, m.match_date, m.club_id, m.tournament,
                m.duration_seconds, m.size_mbytes, m.validation_error,
-               c.name AS club_name,
+               coalesce(c.display_name, c.name) AS club_name,
                array_agg(coalesce(p.display_name, p.name) ORDER BY mp.position)
                    FILTER (WHERE p.id IS NOT NULL) AS players
         FROM match m
@@ -154,7 +154,7 @@ public class MatchRepository {
 
     public Optional<Match> findById(UUID matchId) {
         return jdbc.query("""
-                SELECT m.*, c.name AS club_name
+                SELECT m.*, coalesce(c.display_name, c.name) AS club_name
                 FROM match m
                 LEFT JOIN club c ON c.id = m.club_id
                 WHERE m.id = :matchId
@@ -166,7 +166,7 @@ public class MatchRepository {
 
     public List<Match> validWithoutScreenshots(int limit) {
         return jdbc.query("""
-                SELECT m.*, c.name AS club_name
+                SELECT m.*, coalesce(c.display_name, c.name) AS club_name
                 FROM match m
                 LEFT JOIN club c ON c.id = m.club_id
                 WHERE m.validation_error IS NULL

@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
-public class ArchiveIndexService {
+class ArchiveIndexService {
 
     private final JobService jobService;
     private final ArchiveIndexTask task;

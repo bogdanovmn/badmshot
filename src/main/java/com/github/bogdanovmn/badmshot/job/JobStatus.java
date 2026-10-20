@@ -1,6 +1,6 @@
 package com.github.bogdanovmn.badmshot.job;
 
-public enum JobStatus {
+enum JobStatus {
     RUNNING,
     CANCELLING,
     CANCELLED,

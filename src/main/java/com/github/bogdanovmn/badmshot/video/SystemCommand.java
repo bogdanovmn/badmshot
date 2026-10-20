@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 @Builder
 @Slf4j
-public class SystemCommand {
+class SystemCommand {
     private final String command;
     private final int maxExecutionTimeInSeconds;
     private final boolean captureOutput;
