@@ -182,6 +182,7 @@ class MatchRepository {
         Integer year,
         Integer month,
         UUID clubId,
+        UUID playerId,
         Boolean invalid,
         int limit,
         int offset
@@ -201,6 +202,16 @@ class MatchRepository {
         if (clubId != null) {
             sql.append(" AND m.club_id = :clubId");
             params.addValue("clubId", clubId);
+        }
+        if (playerId != null) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1
+                    FROM match_player mp2
+                    WHERE mp2.match_id = m.id AND mp2.player_id = :playerId
+                 )
+                """);
+            params.addValue("playerId", playerId);
         }
         if (invalid != null) {
             sql.append(invalid ? " AND m.validation_error IS NOT NULL" : " AND m.validation_error IS NULL");
@@ -225,7 +236,8 @@ class MatchRepository {
         ).stream().findFirst();
     }
 
-    public int countBriefs(Integer year, Integer month, UUID clubId, Boolean invalid) {        StringBuilder sql = new StringBuilder("SELECT count(*) FROM match m WHERE 1 = 1");
+    public int countBriefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid) {
+        StringBuilder sql = new StringBuilder("SELECT count(*) FROM match m WHERE 1 = 1");
         MapSqlParameterSource params = new MapSqlParameterSource();
         if (year != null) {
             sql.append(" AND m.year = :year");
@@ -238,6 +250,16 @@ class MatchRepository {
         if (clubId != null) {
             sql.append(" AND m.club_id = :clubId");
             params.addValue("clubId", clubId);
+        }
+        if (playerId != null) {
+            sql.append("""
+                 AND EXISTS (
+                    SELECT 1
+                    FROM match_player mp2
+                    WHERE mp2.match_id = m.id AND mp2.player_id = :playerId
+                 )
+                """);
+            params.addValue("playerId", playerId);
         }
         if (invalid != null) {
             sql.append(invalid ? " AND m.validation_error IS NOT NULL" : " AND m.validation_error IS NULL");

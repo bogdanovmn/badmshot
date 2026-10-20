@@ -29,11 +29,12 @@ class ArchiveController {
         @RequestParam(name = "year", required = false) Integer year,
         @RequestParam(name = "month", required = false) Integer month,
         @RequestParam(name = "clubId", required = false) UUID clubId,
+        @RequestParam(name = "playerId", required = false) UUID playerId,
         @RequestParam(name = "invalid", required = false) Boolean invalid,
         @RequestParam(name = "limit", defaultValue = "50") int limit,
         @RequestParam(name = "offset", defaultValue = "0") int offset
     ) {
-        return archiveService.briefs(year, month, clubId, invalid, limit, offset);
+        return archiveService.briefs(year, month, clubId, playerId, invalid, limit, offset);
     }
 
     @GetMapping("/invalid")
@@ -41,7 +42,7 @@ class ArchiveController {
         @RequestParam(name = "limit", defaultValue = "50") int limit,
         @RequestParam(name = "offset", defaultValue = "0") int offset
     ) {
-        return archiveService.briefs(null, null, null, true, limit, offset);
+        return archiveService.briefs(null, null, null, null, true, limit, offset);
     }
 
     @GetMapping("/matches/{id}")

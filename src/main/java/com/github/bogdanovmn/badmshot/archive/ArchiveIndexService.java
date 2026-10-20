@@ -54,6 +54,7 @@ class ArchiveIndexService {
 
     public Job start(IndexRequest request) {
         IndexOptions options = IndexOptions.builder()
+            .mode(value(request.getMode(), IndexMode.META))
             .archiveDir(archiveDir)
             .count(value(request.getScreenshotsCount(), defaultCount))
             .marginSeconds(value(request.getMarginSeconds(), defaultMarginSeconds))
@@ -70,6 +71,7 @@ class ArchiveIndexService {
 
     private Map<String, Object> params(IndexOptions options) {
         Map<String, Object> params = new LinkedHashMap<>();
+        params.put("mode", options.getMode().name());
         params.put("archiveDir", options.getArchiveDir().toString());
         params.put("count", options.getCount());
         params.put("marginSeconds", options.getMarginSeconds());

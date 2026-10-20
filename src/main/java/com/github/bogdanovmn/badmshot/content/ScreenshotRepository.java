@@ -105,6 +105,14 @@ public class ScreenshotRepository {
         );
     }
 
+    public void deleteAll() {
+        jdbc.update("""
+                DELETE FROM screenshot
+                """,
+            Map.of()
+        );
+    }
+
     public List<Screenshot> byMatch(UUID matchId) {
         return jdbc.query("""
                 SELECT id, match_id, timecode_seconds, image_format, width, height, created_at

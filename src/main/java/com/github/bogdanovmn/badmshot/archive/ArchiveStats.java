@@ -11,6 +11,8 @@ class ArchiveStats {
     int matches;
     long sizeMbytes;
     long durationSeconds;
+    long screenshotCount;
+    long screenshotSizeMbytes;
     List<ArchiveYearStat> years;
     List<CatalogStat> clubs;
     List<CatalogStat> players;

@@ -40,6 +40,13 @@ class ArchiveIndexTask {
     private final VideoProbe videoProbe;
 
     public void run(JobContext context, IndexOptions options) {
+        switch (options.getMode()) {
+            case META -> indexMetadata(context, options);
+            case SCREENSHOTS -> rewriteScreenshots(context, options);
+        }
+    }
+
+    private void indexMetadata(JobContext context, IndexOptions options) {
         List<Path> files = scan(options.getArchiveDir());
         context.totalFiles(files.size());
 
@@ -49,10 +56,10 @@ class ArchiveIndexTask {
             }
             indexMeta(context, options.getArchiveDir(), file);
         }
-        if (context.cancelled()) {
-            return;
-        }
+    }
 
+    private void rewriteScreenshots(JobContext context, IndexOptions options) {
+        screenshotRepository.deleteAll();
         context.phase(JobPhase.SCREENSHOTS);
         makeScreenshots(context, options);
     }

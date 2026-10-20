@@ -6,6 +6,7 @@ import lombok.Value;
 @Value
 @Builder
 class IndexRequest {
+    IndexMode mode;
     Integer screenshotsCount;
     Integer marginSeconds;
     Integer reduceFactor;

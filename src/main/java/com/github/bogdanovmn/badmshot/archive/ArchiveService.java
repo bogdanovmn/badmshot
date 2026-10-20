@@ -34,10 +34,10 @@ class ArchiveService {
     }
 
     @Transactional(readOnly = true)
-    MatchPage briefs(Integer year, Integer month, UUID clubId, Boolean invalid, int limit, int offset) {
+    MatchPage briefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid, int limit, int offset) {
         return MatchPage.builder()
-            .total(matchRepository.countBriefs(year, month, clubId, invalid))
-            .items(matchRepository.briefs(year, month, clubId, invalid, limit, offset))
+            .total(matchRepository.countBriefs(year, month, clubId, playerId, invalid))
+            .items(matchRepository.briefs(year, month, clubId, playerId, invalid, limit, offset))
             .build();
     }
 

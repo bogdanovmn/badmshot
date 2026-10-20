@@ -10,6 +10,7 @@ import java.nio.file.Path;
 @Value
 @Builder
 class IndexOptions {
+    IndexMode mode;
     Path archiveDir;
     int count;
     int marginSeconds;

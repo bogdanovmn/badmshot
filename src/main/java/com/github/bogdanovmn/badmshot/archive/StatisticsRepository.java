@@ -92,10 +92,24 @@ class StatisticsRepository {
             CATALOG_STAT_ROW_MAPPER
         );
 
+        Map<String, Object> screenshots = jdbc.queryForObject("""
+                SELECT count(*) AS frames,
+                       coalesce(sum(octet_length(image)::bigint), 0) AS size_bytes
+                FROM screenshot
+                """,
+            Map.of(),
+            (rs, rowNum) -> Map.<String, Object>of(
+                "frames", rs.getLong("frames"),
+                "sizeBytes", rs.getLong("size_bytes")
+            )
+        );
+
         return ArchiveStats.builder()
             .matches(years.stream().mapToInt(ArchiveYearStat::getMatches).sum())
             .sizeMbytes(years.stream().mapToLong(ArchiveYearStat::getSizeMbytes).sum())
             .durationSeconds(years.stream().mapToLong(ArchiveYearStat::getDurationSeconds).sum())
+            .screenshotCount((Long) screenshots.get("frames"))
+            .screenshotSizeMbytes((Long) screenshots.get("sizeBytes") / (1024 * 1024))
             .years(years)
             .clubs(clubs)
             .players(players)
