@@ -10,7 +10,7 @@ import lombok.Value;
 public class ScreenshotOptions {
     int count;
     int marginSeconds;
-    int reduceFactor;
+    int scalePercent;
     int quality;
     VideoPlayer player;
     String playerPath;

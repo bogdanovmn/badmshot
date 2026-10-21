@@ -26,15 +26,15 @@ badmshot:
   index:
     screenshots-count: 12
     margin-seconds: 30
-    reduce-factor: 2
-    format: jpeg
-    quality: 80
+    scale-percent: 50
+    format: webp
+    quality: 75
     threads: 2
     player: ${BADMSHOT_INDEX_PLAYER:ffmpeg}
   image:
-    default-width: 640
-    max-width: 1920
-    jpeg-quality: 0.85
+    max-width: 3840
+    thumbnail-format: jpeg
+    thumbnail-quality: 0.78
   job:
     stale-timeout-seconds: 60
     heartbeat-seconds: 5

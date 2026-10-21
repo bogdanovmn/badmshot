@@ -7,8 +7,8 @@ public interface ScreenshotCommand {
     enum OutputFormat {
         jpeg, png, webp, avif;
 
-        public String ffmpegExtension() {
-            return this.name();
+        public String fileExtension() {
+            return this == jpeg ? "jpg" : this.name();
         }
     }
 

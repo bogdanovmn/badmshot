@@ -75,7 +75,7 @@ class SystemCommand {
     }
 
     private Path writeScript(String commandLine) throws IOException {
-        Path script = Files.createTempFile("badmshot-command", isWindows() ? ".cmd" : ".sh");
+        Path script = Files.createTempFile("media-command", isWindows() ? ".cmd" : ".sh");
         String content = isWindows()
             ? "@echo off\r\n" + commandLine + "\r\n"
             : commandLine + "\n";

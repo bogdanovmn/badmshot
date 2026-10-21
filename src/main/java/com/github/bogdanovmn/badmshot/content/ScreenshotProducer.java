@@ -2,6 +2,7 @@ package com.github.bogdanovmn.badmshot.content;
 
 import com.github.bogdanovmn.badmshot.video.ScreenshotCommand;
 import com.github.bogdanovmn.badmshot.video.ScreenshotCommandFactory;
+import com.github.bogdanovmn.badmshot.video.ScreenshotSize;
 import com.github.bogdanovmn.badmshot.video.VideoMeta;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,17 +27,18 @@ public class ScreenshotProducer {
     private final ScreenshotRepository screenshotRepository;
 
     public int produce(Path workDir, UUID matchId, Path videoFile, VideoMeta meta, ScreenshotOptions options) {
+        ScreenshotSize size = ScreenshotScale.of(meta, options.getScalePercent());
         ScreenshotCommand command = ScreenshotCommandFactory.builder()
             .playerPath(Path.of(options.getPlayerPath()))
             .outputDir(workDir)
             .format(options.getFormat())
-            .reduceFactor(options.getReduceFactor())
+            .size(size)
             .quality(options.getQuality())
             .build()
             .of(options.getPlayer());
 
-        int reducedWidth = Math.max(1, meta.getWidth() / options.getReduceFactor());
-        int reducedHeight = Math.max(1, meta.getHeight() / options.getReduceFactor());
+        int width = size.isOriginal() ? meta.getWidth() : size.getWidth();
+        int height = size.isOriginal() ? meta.getHeight() : size.getHeight();
 
         int created = 0;
         for (int timecode : timecodes(meta, options)) {
@@ -56,8 +58,8 @@ public class ScreenshotProducer {
                     timecode,
                     Files.readAllBytes(result),
                     options.getFormat().name(),
-                    reducedWidth,
-                    reducedHeight
+                    width,
+                    height
                 );
                 created++;
             } catch (IOException e) {

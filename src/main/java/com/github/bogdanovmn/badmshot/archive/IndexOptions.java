@@ -14,7 +14,7 @@ class IndexOptions {
     Path archiveDir;
     int count;
     int marginSeconds;
-    int reduceFactor;
+    int scalePercent;
     int quality;
     int threads;
     VideoPlayer player;

@@ -155,7 +155,7 @@ class ArchiveIndexTask {
         ScreenshotOptions screenshotOptions = ScreenshotOptions.builder()
             .count(options.getCount())
             .marginSeconds(options.getMarginSeconds())
-            .reduceFactor(options.getReduceFactor())
+            .scalePercent(options.getScalePercent())
             .quality(options.getQuality())
             .player(options.getPlayer())
             .playerPath(options.getPlayerPath())

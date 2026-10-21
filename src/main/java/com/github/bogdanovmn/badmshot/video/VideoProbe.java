@@ -1,20 +1,17 @@
 package com.github.bogdanovmn.badmshot.video;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-@Component
 @Slf4j
 public class VideoProbe {
     private final String ffprobePath;
 
-    public VideoProbe(@Value("${badmshot.video.ffprobe-path:ffprobe}") String ffprobePath) {
+    public VideoProbe(String ffprobePath) {
         this.ffprobePath = ffprobePath;
     }
 

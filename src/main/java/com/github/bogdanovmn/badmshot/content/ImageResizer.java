@@ -14,23 +14,36 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
 
 @Component
 class ImageResizer {
 
+    private static final Set<String> SUPPORTED_OUTPUT_FORMATS = Set.of("jpeg", "png");
+    private static final float PNG_COMPRESSION_QUALITY = 0.9f;
+
     private final int maxWidth;
-    private final float jpegQuality;
+    private final String outputFormat;
+    private final float outputQuality;
 
     ImageResizer(
-        @Value("${badmshot.image.max-width:1920}") int maxWidth,
-        @Value("${badmshot.image.jpeg-quality:0.85}") float jpegQuality
+        @Value("${badmshot.image.max-width:3840}") int maxWidth,
+        @Value("${badmshot.image.thumbnail-format:jpeg}") String outputFormat,
+        @Value("${badmshot.image.thumbnail-quality:0.78}") float outputQuality
     ) {
         this.maxWidth = maxWidth;
-        this.jpegQuality = jpegQuality;
+        this.outputFormat = outputFormat.toLowerCase(Locale.ROOT);
+        this.outputQuality = outputQuality;
+        if (!SUPPORTED_OUTPUT_FORMATS.contains(this.outputFormat)) {
+            throw new IllegalArgumentException("Unsupported thumbnail format: " + outputFormat);
+        }
     }
 
     ScreenshotImage crop(ScreenshotImage source, int requestedWidth) {
-        int targetWidth = Math.max(1, Math.min(requestedWidth, maxWidth));
+        int targetWidth = maxWidth > 0
+            ? Math.max(1, Math.min(requestedWidth, maxWidth))
+            : Math.max(1, requestedWidth);
         if (targetWidth >= source.getWidth()) {
             return source;
         }
@@ -39,7 +52,7 @@ class ImageResizer {
             return source;
         }
         int targetHeight = Math.max(1, Math.round(source.getHeight() * (float) targetWidth / source.getWidth()));
-        BufferedImage scaled = new BufferedImage(targetWidth, targetHeight, targetType(original, source.getFormat()));
+        BufferedImage scaled = new BufferedImage(targetWidth, targetHeight, targetType(original));
         Graphics2D graphics = scaled.createGraphics();
         try {
             graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
@@ -48,23 +61,23 @@ class ImageResizer {
         } finally {
             graphics.dispose();
         }
-        byte[] data = encode(scaled, source.getFormat());
+        byte[] data = encode(scaled);
         if (data == null) {
             return source;
         }
         return ScreenshotImage.builder()
             .data(data)
-            .format(source.getFormat())
+            .format(outputFormat)
             .width(targetWidth)
             .height(targetHeight)
             .build();
     }
 
-    private int targetType(BufferedImage original, String format) {
-        if ("jpeg".equals(format)) {
-            return BufferedImage.TYPE_INT_RGB;
+    private int targetType(BufferedImage original) {
+        if ("png".equals(outputFormat) && original.getColorModel().hasAlpha()) {
+            return BufferedImage.TYPE_INT_ARGB;
         }
-        return original.getType() == BufferedImage.TYPE_CUSTOM ? BufferedImage.TYPE_INT_ARGB : original.getType();
+        return BufferedImage.TYPE_INT_RGB;
     }
 
     private BufferedImage decode(byte[] data) {
@@ -75,21 +88,13 @@ class ImageResizer {
         }
     }
 
-    private byte[] encode(BufferedImage image, String format) {
-        String writerFormat = switch (format) {
-            case "jpeg" -> "jpg";
-            case "png" -> "png";
-            default -> null;
-        };
-        if (writerFormat == null) {
-            return null;
-        }
+    private byte[] encode(BufferedImage image) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
-            if ("jpg".equals(writerFormat)) {
+            if ("jpeg".equals(outputFormat)) {
                 writeJpeg(image, output);
             } else {
-                ImageIO.write(image, writerFormat, output);
+                writePng(image, output);
             }
         } catch (IOException e) {
             return null;
@@ -103,7 +108,25 @@ class ImageResizer {
             writer.setOutput(imageOutput);
             ImageWriteParam param = writer.getDefaultWriteParam();
             param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(jpegQuality);
+            param.setCompressionQuality(outputQuality);
+            if (param.canWriteProgressive()) {
+                param.setProgressiveMode(ImageWriteParam.MODE_DEFAULT);
+            }
+            writer.write(null, new IIOImage(image, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+    }
+
+    private void writePng(BufferedImage image, ByteArrayOutputStream output) throws IOException {
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("png").next();
+        try (ImageOutputStream imageOutput = ImageIO.createImageOutputStream(output)) {
+            writer.setOutput(imageOutput);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if (param.canWriteCompressed()) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(PNG_COMPRESSION_QUALITY);
+            }
             writer.write(null, new IIOImage(image, null, null), param);
         } finally {
             writer.dispose();

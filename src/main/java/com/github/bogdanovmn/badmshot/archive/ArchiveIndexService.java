@@ -8,18 +8,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 class ArchiveIndexService {
+
+    private static final Set<ScreenshotCommand.OutputFormat> ALLOWED_FORMATS =
+        EnumSet.of(ScreenshotCommand.OutputFormat.jpeg, ScreenshotCommand.OutputFormat.webp);
 
     private final JobService jobService;
     private final ArchiveIndexTask task;
     private final Path archiveDir;
     private final int defaultCount;
     private final int defaultMarginSeconds;
-    private final int defaultReduceFactor;
+    private final int defaultScalePercent;
     private final int defaultQuality;
     private final int defaultThreads;
     private final String defaultPlayer;
@@ -32,11 +38,11 @@ class ArchiveIndexService {
         @Value("${badmshot.archive-dir}") String archiveDir,
         @Value("${badmshot.index.screenshots-count:12}") int defaultCount,
         @Value("${badmshot.index.margin-seconds:30}") int defaultMarginSeconds,
-        @Value("${badmshot.index.reduce-factor:2}") int defaultReduceFactor,
-        @Value("${badmshot.index.quality:80}") int defaultQuality,
+        @Value("${badmshot.index.scale-percent:50}") int defaultScalePercent,
+        @Value("${badmshot.index.quality:75}") int defaultQuality,
         @Value("${badmshot.index.threads:2}") int defaultThreads,
         @Value("${badmshot.index.player:ffmpeg}") String defaultPlayer,
-        @Value("${badmshot.index.format:jpeg}") String defaultFormat,
+        @Value("${badmshot.index.format:webp}") String defaultFormat,
         @Value("${badmshot.video.player-path:ffmpeg}") String playerPath
     ) {
         this.jobService = jobService;
@@ -44,7 +50,7 @@ class ArchiveIndexService {
         this.archiveDir = Path.of(archiveDir);
         this.defaultCount = defaultCount;
         this.defaultMarginSeconds = defaultMarginSeconds;
-        this.defaultReduceFactor = defaultReduceFactor;
+        this.defaultScalePercent = defaultScalePercent;
         this.defaultQuality = defaultQuality;
         this.defaultThreads = defaultThreads;
         this.defaultPlayer = defaultPlayer;
@@ -58,15 +64,26 @@ class ArchiveIndexService {
             .archiveDir(archiveDir)
             .count(value(request.getScreenshotsCount(), defaultCount))
             .marginSeconds(value(request.getMarginSeconds(), defaultMarginSeconds))
-            .reduceFactor(value(request.getReduceFactor(), defaultReduceFactor))
+            .scalePercent(scalePercent(value(request.getScalePercent(), defaultScalePercent)))
             .quality(value(request.getQuality(), defaultQuality))
             .threads(value(request.getThreads(), defaultThreads))
-            .player(VideoPlayer.valueOf(value(request.getPlayer(), defaultPlayer).toUpperCase()))
+            .player(VideoPlayer.valueOf(value(request.getPlayer(), defaultPlayer).toUpperCase(Locale.ROOT)))
             .playerPath(playerPath)
-            .format(ScreenshotCommand.OutputFormat.valueOf(value(request.getFormat(), defaultFormat).toLowerCase()))
+            .format(format(value(request.getFormat(), defaultFormat)))
             .build();
 
+        requireSupportedPlayerFormat(options);
+
         return jobService.start(JobService.TYPE_INDEX, params(options), context -> task.run(context, options));
+    }
+
+    private void requireSupportedPlayerFormat(IndexOptions options) {
+        if (options.getPlayer() == VideoPlayer.VLC && options.getFormat() != ScreenshotCommand.OutputFormat.jpeg
+            && options.getFormat() != ScreenshotCommand.OutputFormat.png) {
+            throw new IllegalArgumentException(
+                "VLC supports only jpeg and png screenshot format, requested: " + options.getFormat()
+            );
+        }
     }
 
     private Map<String, Object> params(IndexOptions options) {
@@ -75,12 +92,31 @@ class ArchiveIndexService {
         params.put("archiveDir", options.getArchiveDir().toString());
         params.put("count", options.getCount());
         params.put("marginSeconds", options.getMarginSeconds());
-        params.put("reduceFactor", options.getReduceFactor());
+        params.put("scalePercent", options.getScalePercent());
         params.put("quality", options.getQuality());
         params.put("threads", options.getThreads());
         params.put("player", options.getPlayer().name());
         params.put("format", options.getFormat().name());
         return params;
+    }
+
+    private ScreenshotCommand.OutputFormat format(String value) {
+        ScreenshotCommand.OutputFormat format;
+        try {
+            format = ScreenshotCommand.OutputFormat.valueOf(value.toLowerCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown screenshot format: " + value);
+        }
+        if (!ALLOWED_FORMATS.contains(format)) {
+            throw new IllegalArgumentException(
+                "Unsupported screenshot format: " + format + ". Allowed: " + ALLOWED_FORMATS
+            );
+        }
+        return format;
+    }
+
+    private int scalePercent(int value) {
+        return Math.max(1, Math.min(100, value));
     }
 
     private <T> T value(T requestValue, T defaultValue) {

@@ -13,20 +13,11 @@ class VlcScreenshotCommand implements ScreenshotCommand {
     private final Path vlcPath;
     private final Path outputDir;
     private final OutputFormat format;
+    private final ScreenshotSize size;
 
     @Override
     public boolean execute(Path videoFile, long timestamp, String outputName) {
-        String vlcFormat = format == OutputFormat.jpeg ? "jpg" : "png";
-        String currentCommand = String.format(
-            "%sq %s -I rc --rate=1 --video-filter=scene --vout=dummy --start-time=%d --stop-time=%d --scene-format=%s --scene-ratio=24 --scene-prefix=%s --scene-path=%s vlc://quit",
-                vlcPath,
-                videoFile,
-                timestamp,
-                timestamp + 1,
-                vlcFormat,
-                outputName,
-                outputDir
-        );
+        String currentCommand = buildCommand(videoFile, timestamp, outputName);
         try {
             boolean commandIsOk = SystemCommand.builder()
                 .command(currentCommand)
@@ -34,7 +25,7 @@ class VlcScreenshotCommand implements ScreenshotCommand {
             .build().execute();
             if (commandIsOk) {
                 File fileToDelete = outputDir.resolve(
-                    String.format("%s00025.%s", outputName, vlcFormat)
+                    String.format("%s00025.%s", outputName, format.fileExtension())
                 ).toFile();
                 if (fileToDelete.exists() && !fileToDelete.delete()) {
                     log.warn("Can't delete file: {}", fileToDelete.getAbsolutePath());
@@ -47,4 +38,22 @@ class VlcScreenshotCommand implements ScreenshotCommand {
         }
     }
 
+    String buildCommand(Path videoFile, long timestamp, String outputName) {
+        StringBuilder command = new StringBuilder(String.format(
+            "%sq %s -I rc --rate=1 --video-filter=scene --vout=dummy --start-time=%d --stop-time=%d --scene-format=%s --scene-ratio=24 --scene-prefix=%s --scene-path=%s",
+                vlcPath,
+                videoFile,
+                timestamp,
+                timestamp + 1,
+                format.fileExtension(),
+                outputName,
+                outputDir
+        ));
+        if (size != null && !size.isOriginal()) {
+            command.append(" --scene-width=").append(size.getWidth())
+                .append(" --scene-height=").append(size.getHeight());
+        }
+        command.append(" vlc://quit");
+        return command.toString();
+    }
 }

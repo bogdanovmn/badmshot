@@ -9,7 +9,7 @@ class IndexRequest {
     IndexMode mode;
     Integer screenshotsCount;
     Integer marginSeconds;
-    Integer reduceFactor;
+    Integer scalePercent;
     Integer quality;
     Integer threads;
     String player;
