@@ -47,6 +47,8 @@ class WebSecurity {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 				.requestMatchers(HttpMethod.GET, "/version").permitAll()
+				.requestMatchers(HttpMethod.GET, "/frame-effects").permitAll()
+				.requestMatchers(HttpMethod.PUT, "/frame-effects").hasAuthority("admin")
 				.requestMatchers(HttpMethod.GET, "/screenshots/random").permitAll()
 				.requestMatchers(HttpMethod.GET, "/screenshots/top").permitAll()
 				.requestMatchers(HttpMethod.GET, "/screenshots/*/crop/*").permitAll()
