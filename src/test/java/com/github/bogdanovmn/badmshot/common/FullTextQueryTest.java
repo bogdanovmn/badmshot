@@ -28,4 +28,11 @@ class FullTextQueryTest {
     void emptyForPunctuationOnly() {
         assertTrue(FullTextQuery.of("!!!").isEmpty());
     }
+
+    @Test
+    void normalizesTermForFuzzySearch() {
+        assertEquals("", FullTextQuery.normalized(null));
+        assertEquals("", FullTextQuery.normalized("   "));
+        assertEquals("Ivan Petrov", FullTextQuery.normalized(" Ivan, Petrov! "));
+    }
 }

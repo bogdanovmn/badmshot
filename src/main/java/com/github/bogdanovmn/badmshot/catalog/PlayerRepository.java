@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -109,25 +110,41 @@ public class PlayerRepository {
     }
 
     public List<Player> search(String term, UUID clubId, int limit) {
-        Optional<String> query = FullTextQuery.of(term);
+        String preparedTerm = FullTextQuery.of(term).orElse("");
+        String searchTerm = FullTextQuery.normalized(term);
         StringBuilder sql = new StringBuilder(PLAYER_SELECT).append("""
                 WHERE p.alias_of_player_id IS NULL
                 """);
-        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit);
-        query.ifPresent(q -> {
-            sql.append("""
-                 AND (
-                    p.search_vector @@ to_tsquery('simple', :tsq)
-                    OR EXISTS (
-                        SELECT 1
-                        FROM player ax
-                        WHERE ax.alias_of_player_id = p.id
-                          AND ax.search_vector @@ to_tsquery('simple', :tsq)
-                    )
-                 )
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("term", searchTerm)
+            .addValue("limit", limit);
+        List<String> termConditions = new ArrayList<>();
+        if (!preparedTerm.isEmpty()) {
+            termConditions.add("""
+                (
+                   p.search_vector @@ to_tsquery('simple', :tsq)
+                   OR EXISTS (
+                       SELECT 1
+                       FROM player ax
+                       WHERE ax.alias_of_player_id = p.id
+                         AND ax.search_vector @@ to_tsquery('simple', :tsq)
+                   )
+                )
                 """);
-            params.addValue("tsq", q);
-        });
+            params.addValue("tsq", preparedTerm);
+        }
+        if (!searchTerm.isEmpty()) {
+            termConditions.add("""
+                LEAST(
+                   LOWER(coalesce(nullif(p.display_name, ''), p.name)) <-> LOWER(:term),
+                   LOWER(coalesce(nullif(a.display_name, ''), a.name, '')) <-> LOWER(:term)
+                ) <= :maxDistance
+                """);
+            params.addValue("maxDistance", maxDistance(searchTerm));
+        }
+        if (!termConditions.isEmpty()) {
+            sql.append(" AND (").append(String.join(" OR ", termConditions)).append(")");
+        }
         if (clubId != null) {
             sql.append("""
                  AND EXISTS (
@@ -140,8 +157,22 @@ public class PlayerRepository {
                 """);
             params.addValue("clubId", clubId);
         }
-        sql.append(" ORDER BY coalesce(nullif(p.display_name, ''), p.name) LIMIT :limit");
+        sql.append("""
+             ORDER BY LEAST(
+                 LOWER(coalesce(nullif(p.display_name, ''), p.name)) <-> LOWER(:term),
+                 LOWER(coalesce(nullif(a.display_name, ''), a.name, '')) <-> LOWER(:term)
+             ), coalesce(nullif(p.display_name, ''), p.name)
+             LIMIT :limit
+            """);
         return jdbc.query(sql.toString(), params, PLAYER_ROW_MAPPER);
+    }
+
+    private static double maxDistance(String term) {
+        int length = term.codePointCount(0, term.length());
+        if (length <= 3) {
+            return 0.82;
+        }
+        return 0.85;
     }
 
     public List<Player> byMatch(UUID matchId) {

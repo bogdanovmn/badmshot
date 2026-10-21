@@ -10,14 +10,23 @@ public class FullTextQuery {
     }
 
     public static Optional<String> of(String term) {
-        if (term == null || term.isBlank()) {
+        String normalized = normalized(term);
+        if (normalized.isEmpty()) {
             return Optional.empty();
         }
-        String query = Arrays.stream(term.trim().split("\\s+"))
-            .map(word -> word.replaceAll("[^\\p{L}\\p{N}]", ""))
-            .filter(word -> !word.isEmpty())
+        String query = Arrays.stream(normalized.split("\\s+"))
             .map(word -> word + ":*")
             .collect(Collectors.joining(" & "));
-        return query.isEmpty() ? Optional.empty() : Optional.of(query);
+        return Optional.of(query);
+    }
+
+    public static String normalized(String term) {
+        if (term == null || term.isBlank()) {
+            return "";
+        }
+        return Arrays.stream(term.trim().split("\\s+"))
+            .map(word -> word.replaceAll("[^\\p{L}\\p{N}]", ""))
+            .filter(word -> !word.isEmpty())
+            .collect(Collectors.joining(" "));
     }
 }
