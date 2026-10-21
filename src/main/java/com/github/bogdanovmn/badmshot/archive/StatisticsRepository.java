@@ -78,13 +78,18 @@ class StatisticsRepository {
         );
 
         List<CatalogStat> players = jdbc.query("""
-                SELECT p.id, coalesce(p.display_name, p.name) AS name, count(*) AS matches,
+                SELECT p.id, coalesce(nullif(p.display_name, ''), p.name) AS name, count(*) AS matches,
                        coalesce(sum(m.size_mbytes), 0) AS size_mbytes,
                        coalesce(sum(m.duration_seconds), 0) AS duration_seconds
-                FROM match_player mp
-                JOIN match m ON m.id = mp.match_id
-                JOIN player p ON p.id = mp.player_id
-                WHERE m.validation_error IS NULL
+                FROM (
+                    SELECT DISTINCT coalesce(pp.alias_of_player_id, pp.id) AS root_id, m.id AS match_id
+                    FROM match_player mp
+                    JOIN match m ON m.id = mp.match_id
+                    JOIN player pp ON pp.id = mp.player_id
+                    WHERE m.validation_error IS NULL
+                ) pm
+                JOIN player p ON p.id = pm.root_id
+                JOIN match m ON m.id = pm.match_id
                 GROUP BY p.id, p.name, p.display_name
                 ORDER BY matches DESC, name
                 """,

@@ -28,14 +28,18 @@
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 name varchar(200) NOT NULL UNIQUE,
                 display_name varchar(200),
-                tournament_alias varchar(200),
+                alias_of_player_id uuid REFERENCES player(id) ON DELETE SET NULL,
                 search_vector tsvector GENERATED ALWAYS AS (
                     to_tsvector('simple'::regconfig,
                         coalesce(name, '') || ' ' || coalesce(display_name, '')
                     )
-                ) STORED
+                ) STORED,
+                CONSTRAINT player_alias_not_self
+                    CHECK (alias_of_player_id IS NULL OR alias_of_player_id != id)
             );
             CREATE INDEX player_search_vector_idx ON player USING gin (search_vector);
+            CREATE UNIQUE INDEX player_alias_of_uniq ON player (alias_of_player_id)
+                WHERE alias_of_player_id IS NOT NULL;
         </sql>
     </changeSet>
 

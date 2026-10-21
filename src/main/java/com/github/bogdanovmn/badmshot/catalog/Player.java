@@ -11,9 +11,14 @@ public class Player {
     UUID id;
     String name;
     String displayName;
-    String tournamentAlias;
+    UUID aliasOfPlayerId;
+    PlayerAlias alias;
 
     public String getDisplayLabel() {
         return displayName == null || displayName.isBlank() ? name : displayName;
+    }
+
+    public boolean isAlias() {
+        return aliasOfPlayerId != null;
     }
 }

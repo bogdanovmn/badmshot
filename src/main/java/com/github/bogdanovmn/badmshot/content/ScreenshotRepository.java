@@ -60,13 +60,14 @@ public class ScreenshotRepository {
                    SELECT 1 FROM screenshot_like l2
                    WHERE l2.screenshot_id = s.id AND l2.user_id = :userId
                ) AS liked,
-               array_agg(coalesce(p.display_name, p.name) ORDER BY mp.position)
-                   FILTER (WHERE p.id IS NOT NULL) AS players
+               array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
+                   FILTER (WHERE root_player.id IS NOT NULL) AS players
         FROM screenshot s
         JOIN match m ON m.id = s.match_id
         LEFT JOIN club c ON c.id = m.club_id
         LEFT JOIN match_player mp ON mp.match_id = m.id
         LEFT JOIN player p ON p.id = mp.player_id
+        LEFT JOIN player root_player ON root_player.id = coalesce(p.alias_of_player_id, p.id)
         """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -262,9 +263,10 @@ public class ScreenshotRepository {
                  AND m.id IN (
                     SELECT mp2.match_id
                     FROM match_player mp2
-                    WHERE mp2.player_id IN (:players)
+                    JOIN player p2 ON p2.id = mp2.player_id
+                    WHERE coalesce(p2.alias_of_player_id, p2.id) IN (:players)
                     GROUP BY mp2.match_id
-                    HAVING count(DISTINCT mp2.player_id) = :playersCount
+                    HAVING count(DISTINCT coalesce(p2.alias_of_player_id, p2.id)) = :playersCount
                  )
                 """);
             params.addValue("players", players);

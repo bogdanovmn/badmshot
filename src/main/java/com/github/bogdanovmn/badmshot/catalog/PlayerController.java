@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @RestController
@@ -15,12 +14,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class PlayerController {
 
-    private final PlayerRepository playerRepository;
+    private final PlayerService playerService;
 
     @PutMapping("/{id}")
     void update(@PathVariable("id") UUID id, @RequestBody PlayerUpdate request) {
-        playerRepository.findById(id)
-            .orElseThrow(() -> new NoSuchElementException("Игрок не найден: " + id));
-        playerRepository.update(id, request.getDisplayName(), request.getTournamentAlias());
+        playerService.update(id, request);
     }
 }

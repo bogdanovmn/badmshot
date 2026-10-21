@@ -75,7 +75,6 @@ class ArchiveIndexTask {
             clubId = clubRepository.upsert(parsed.getClub());
             playerIds = parsed.getPlayers().stream()
                 .map(playerRepository::upsert)
-                .distinct()
                 .collect(Collectors.toList());
         }
 

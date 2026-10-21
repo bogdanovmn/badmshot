@@ -35,9 +35,12 @@ class ArchiveService {
 
     @Transactional(readOnly = true)
     MatchPage briefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid, int limit, int offset) {
+        UUID canonicalPlayerId = playerId == null
+            ? null
+            : playerRepository.canonicalId(playerId).orElse(playerId);
         return MatchPage.builder()
-            .total(matchRepository.countBriefs(year, month, clubId, playerId, invalid))
-            .items(matchRepository.briefs(year, month, clubId, playerId, invalid, limit, offset))
+            .total(matchRepository.countBriefs(year, month, clubId, canonicalPlayerId, invalid))
+            .items(matchRepository.briefs(year, month, clubId, canonicalPlayerId, invalid, limit, offset))
             .build();
     }
 
@@ -66,7 +69,7 @@ class ArchiveService {
         }
         List<String> cleaned = players == null
             ? List.of()
-            : players.stream().map(String::trim).filter(name -> !name.isBlank()).distinct().toList();
+            : players.stream().map(String::trim).filter(name -> !name.isBlank()).toList();
         if (cleaned.size() != 2 && cleaned.size() != 4) {
             throw new IllegalArgumentException("Ожидается 2 или 4 игрока, получено: " + cleaned.size());
         }

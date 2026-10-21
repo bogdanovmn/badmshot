@@ -1,5 +1,6 @@
 package com.github.bogdanovmn.badmshot.content;
 
+import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,14 +17,26 @@ class ScreenshotService {
     private static final UUID ANONYMOUS_USER = new UUID(0, 0);
 
     private final ScreenshotRepository screenshotRepository;
+    private final PlayerRepository playerRepository;
 
     @Value("${badmshot.top-frames-limit:100}")
     private int topFramesLimit;
 
     @Transactional(readOnly = true)
     ScreenshotCard random(ScreenshotFilter filter, UUID userId, UUID excludeMatchId, UUID excludeClubId) {
-        return screenshotRepository.randomCard(filter, userIdOrAnonymous(userId), excludeMatchId, excludeClubId)
+        ScreenshotFilter normalized = normalize(filter);
+        if (!filter.playersOrEmpty().isEmpty() && normalized.getPlayers().isEmpty()) {
+            throw new NoSuchElementException("Кадры не найдены");
+        }
+        return screenshotRepository.randomCard(normalized, userIdOrAnonymous(userId), excludeMatchId, excludeClubId)
             .orElseThrow(() -> new NoSuchElementException("Кадры не найдены"));
+    }
+
+    private ScreenshotFilter normalize(ScreenshotFilter filter) {
+        return ScreenshotFilter.builder()
+            .players(playerRepository.canonicalIds(filter.playersOrEmpty()))
+            .clubs(filter.clubsOrEmpty())
+            .build();
     }
 
     @Transactional(readOnly = true)

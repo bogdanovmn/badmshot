@@ -58,7 +58,9 @@ public class ClubRepository {
                     SELECT 1
                     FROM match m
                     JOIN match_player mp ON mp.match_id = m.id
-                    WHERE m.club_id = c.id AND mp.player_id = :playerId
+                    JOIN player p ON p.id = mp.player_id
+                    WHERE m.club_id = c.id
+                      AND coalesce(p.alias_of_player_id, p.id) = :playerId
                 )
                 ORDER BY coalesce(c.display_name, c.name)
                 """,

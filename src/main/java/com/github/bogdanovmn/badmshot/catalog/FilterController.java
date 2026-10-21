@@ -23,7 +23,10 @@ class FilterController {
 
     @GetMapping("/clubs")
     List<Club> clubs(@RequestParam(name = "playerId", required = false) UUID playerId) {
-        return clubRepository.list(playerId);
+        if (playerId == null) {
+            return clubRepository.list(null);
+        }
+        return clubRepository.list(playerRepository.canonicalId(playerId).orElse(playerId));
     }
 
     @GetMapping("/players")

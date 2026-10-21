@@ -57,12 +57,13 @@ class MatchRepository {
         SELECT m.id, m.rel_path, m.year, m.month, m.match_date, m.club_id, m.tournament,
                m.duration_seconds, m.size_mbytes, m.validation_error,
                coalesce(c.display_name, c.name) AS club_name,
-               array_agg(coalesce(p.display_name, p.name) ORDER BY mp.position)
-                   FILTER (WHERE p.id IS NOT NULL) AS players
+               array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
+                   FILTER (WHERE root_player.id IS NOT NULL) AS players
         FROM match m
         LEFT JOIN club c ON c.id = m.club_id
         LEFT JOIN match_player mp ON mp.match_id = m.id
         LEFT JOIN player p ON p.id = mp.player_id
+        LEFT JOIN player root_player ON root_player.id = coalesce(p.alias_of_player_id, p.id)
         """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -208,7 +209,9 @@ class MatchRepository {
                  AND EXISTS (
                     SELECT 1
                     FROM match_player mp2
-                    WHERE mp2.match_id = m.id AND mp2.player_id = :playerId
+                    JOIN player p2 ON p2.id = mp2.player_id
+                    WHERE mp2.match_id = m.id
+                      AND coalesce(p2.alias_of_player_id, p2.id) = :playerId
                  )
                 """);
             params.addValue("playerId", playerId);
@@ -256,7 +259,9 @@ class MatchRepository {
                  AND EXISTS (
                     SELECT 1
                     FROM match_player mp2
-                    WHERE mp2.match_id = m.id AND mp2.player_id = :playerId
+                    JOIN player p2 ON p2.id = mp2.player_id
+                    WHERE mp2.match_id = m.id
+                      AND coalesce(p2.alias_of_player_id, p2.id) = :playerId
                  )
                 """);
             params.addValue("playerId", playerId);
