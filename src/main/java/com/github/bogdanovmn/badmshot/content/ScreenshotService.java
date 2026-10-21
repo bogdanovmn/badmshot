@@ -3,11 +3,13 @@ package com.github.bogdanovmn.badmshot.content;
 import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -18,18 +20,48 @@ class ScreenshotService {
 
     private final ScreenshotRepository screenshotRepository;
     private final PlayerRepository playerRepository;
+    private final LastServedFrames lastServedFrames;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${badmshot.top-frames-limit:100}")
     private int topFramesLimit;
 
     @Transactional(readOnly = true)
-    ScreenshotCard random(ScreenshotFilter filter, UUID userId, UUID excludeMatchId, UUID excludeClubId) {
+    ScreenshotCard random(UUID userId) {
+        return next(ScreenshotFilter.empty(), userId);
+    }
+
+    @Transactional(readOnly = true)
+    ScreenshotCard next(ScreenshotFilter filter, UUID userId) {
         ScreenshotFilter normalized = normalize(filter);
         if (!filter.playersOrEmpty().isEmpty() && normalized.getPlayers().isEmpty()) {
             throw new NoSuchElementException("Кадры не найдены");
         }
-        return screenshotRepository.randomCard(normalized, userIdOrAnonymous(userId), excludeMatchId, excludeClubId)
-            .orElseThrow(() -> new NoSuchElementException("Кадры не найдены"));
+        ServedFrame last = lastServedFrames.get(userId);
+        Optional<ScreenshotCard> card = screenshotRepository.randomCard(
+            normalized, userIdOrAnonymous(userId), last
+        );
+        if (card.isEmpty() && last != null) {
+            card = screenshotRepository.randomCard(
+                normalized,
+                userIdOrAnonymous(userId),
+                ServedFrame.builder().screenshotId(last.getScreenshotId()).build()
+            );
+        }
+        if (card.isEmpty() && last != null) {
+            card = screenshotRepository.randomCard(normalized, userIdOrAnonymous(userId), null);
+        }
+        ScreenshotCard result = card.orElseThrow(() -> new NoSuchElementException("Кадры не найдены"));
+        lastServedFrames.put(userId, result);
+        return result;
+    }
+
+    void requestView(UUID id, UUID userId) {
+        eventPublisher.publishEvent(ScreenshotViewEvent.builder()
+            .screenshotId(id)
+            .userId(userId)
+            .build()
+        );
     }
 
     private ScreenshotFilter normalize(ScreenshotFilter filter) {

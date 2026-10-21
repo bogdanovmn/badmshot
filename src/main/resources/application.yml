@@ -24,10 +24,10 @@ badmshot:
     player-path: ${BADMSHOT_VIDEO_PLAYER_PATH:ffmpeg}
     ffprobe-path: ${BADMSHOT_FFPROBE_PATH:ffprobe}
   index:
-    screenshots-count: 12
-    margin-seconds: 30
-    scale-percent: 50
-    format: webp
+    screenshots-count: 10
+    margin-seconds: 7
+    scale-percent: 100
+    format: jpeg
     quality: 75
     threads: 2
     player: ${BADMSHOT_INDEX_PLAYER:ffmpeg}
@@ -41,7 +41,11 @@ badmshot:
   rate-limit:
     min-seconds-between-frames: 3
     free-frames: 3
-  top-frames-limit: 20
+  top-frames-limit: 15
+  teaser:
+    cache-days: 1
+  views:
+    cooldown-seconds: 300
   filters:
     limit: 50
 
@@ -54,5 +58,3 @@ management:
   metrics:
     enable:
       jvm: 'true'
-      percentiles-histogram:
-        http.server.requests: 'true'

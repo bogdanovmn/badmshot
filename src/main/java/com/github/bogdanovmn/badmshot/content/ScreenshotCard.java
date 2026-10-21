@@ -27,4 +27,5 @@ class ScreenshotCard {
     List<String> players;
     long likes;
     boolean liked;
+    long views;
 }

@@ -3,6 +3,7 @@ package com.github.bogdanovmn.badmshot.content;
 import com.github.bogdanovmn.badmshot.infrastructure.security.CurrentUserId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
@@ -24,26 +26,36 @@ import java.util.UUID;
 class ScreenshotController {
 
     private final ScreenshotService screenshotService;
+    private final FrameTeaserService frameTeaserService;
     private final FrameRateLimit frameRateLimit;
     private final ImageResizer imageResizer;
 
+    @GetMapping("/teaser")
+    List<ScreenshotCard> teaser() {
+        return frameTeaserService.cards();
+    }
+
     @GetMapping("/random")
-    ScreenshotCard random(
-        @RequestParam(name = "players", required = false) List<UUID> players,
-        @RequestParam(name = "clubs", required = false) List<UUID> clubs,
-        @RequestParam(name = "excludeMatchId", required = false) UUID excludeMatchId,
-        @RequestParam(name = "excludeClubId", required = false) UUID excludeClubId
-    ) {
-        return screenshotService.random(filter(players, clubs), null, excludeMatchId, excludeClubId);
+    @PreAuthorize("isAuthenticated()")
+    ScreenshotCard random(@CurrentUserId UUID userId) {
+        return screenshotService.random(userId);
     }
 
     @GetMapping("/top")
+    @PreAuthorize("isAuthenticated()")
     List<ScreenshotCard> top(@CurrentUserId UUID userId) {
         return screenshotService.top(userId);
     }
 
     @GetMapping("/{id}/crop/{width}")
-    ResponseEntity<byte[]> crop(@PathVariable("id") UUID id, @PathVariable("width") int width) {
+    ResponseEntity<byte[]> crop(
+        @PathVariable("id") UUID id,
+        @PathVariable("width") int width,
+        @CurrentUserId UUID userId
+    ) {
+        if (userId == null && !frameTeaserService.contains(id)) {
+            throw new ScreenshotAccessDeniedException("Кадр доступен только после авторизации");
+        }
         ScreenshotImage source = screenshotService.image(id);
         ScreenshotImage resized = imageResizer.crop(source, width);
         return ResponseEntity.ok()
@@ -57,14 +69,19 @@ class ScreenshotController {
     ScreenshotCard next(
         @CurrentUserId UUID userId,
         @RequestParam(name = "players", required = false) List<UUID> players,
-        @RequestParam(name = "clubs", required = false) List<UUID> clubs,
-        @RequestParam(name = "excludeMatchId", required = false) UUID excludeMatchId,
-        @RequestParam(name = "excludeClubId", required = false) UUID excludeClubId
+        @RequestParam(name = "clubs", required = false) List<UUID> clubs
     ) {
         if (!frameRateLimit.allow(userId)) {
             throw new TooManyRequestsException("Слишком часто. Подождите несколько секунд.");
         }
-        return screenshotService.random(filter(players, clubs), userId, excludeMatchId, excludeClubId);
+        return screenshotService.next(filter(players, clubs), userId);
+    }
+
+    @PostMapping("/{id}/view")
+    @PreAuthorize("isAuthenticated()")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    void view(@PathVariable("id") UUID id, @CurrentUserId UUID userId) {
+        screenshotService.requestView(id, userId);
     }
 
     @GetMapping("/liked")

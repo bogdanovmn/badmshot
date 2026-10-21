@@ -7,5 +7,6 @@
 
     <include file="db/changelog/001-initial.xml"/>
     <include file="db/changelog/006-frame-effects.xml"/>
+    <include file="db/changelog/007-screenshot-views.xml"/>
 
 </databaseChangeLog>

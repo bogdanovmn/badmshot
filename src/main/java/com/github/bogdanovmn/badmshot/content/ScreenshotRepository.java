@@ -49,10 +49,11 @@ public class ScreenshotRepository {
         .players(playerNames(rs))
         .likes(rs.getLong("likes"))
         .liked(rs.getBoolean("liked"))
+        .views(rs.getLong("views"))
         .build();
 
     private static final String CARD_SELECT = """
-        SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.created_at,
+        SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.created_at, s.views,
                m.year, m.month, m.match_date, m.tournament, m.club_id,
                coalesce(c.display_name, c.name) AS club_name,
                (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) AS likes,
@@ -155,8 +156,7 @@ public class ScreenshotRepository {
     public Optional<ScreenshotCard> randomCard(
         ScreenshotFilter filter,
         UUID userId,
-        UUID excludeMatchId,
-        UUID excludeClubId
+        ServedFrame exclude
     ) {
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("userId", userId)
@@ -167,25 +167,76 @@ public class ScreenshotRepository {
 
             GROUP BY s.id, m.id, c.id
             """);
-        sql.append(randomOrder(params, excludeMatchId, excludeClubId));
+        sql.append(randomOrder(params, exclude));
         sql.append("""
              LIMIT :limit
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER).stream().findFirst();
     }
 
-    private String randomOrder(MapSqlParameterSource params, UUID excludeMatchId, UUID excludeClubId) {
+    private String randomOrder(MapSqlParameterSource params, ServedFrame exclude) {
         List<String> keys = new ArrayList<>();
-        if (excludeClubId != null) {
-            params.addValue("excludeClubId", excludeClubId);
-            keys.add("(m.club_id IS NOT DISTINCT FROM :excludeClubId)");
-        }
-        if (excludeMatchId != null) {
-            params.addValue("excludeMatchId", excludeMatchId);
-            keys.add("(m.id = :excludeMatchId)");
+        if (exclude != null) {
+            if (exclude.getScreenshotId() != null) {
+                params.addValue("excludeScreenshotId", exclude.getScreenshotId());
+                keys.add("(s.id = :excludeScreenshotId)");
+            }
+            if (exclude.getClubId() != null) {
+                params.addValue("excludeClubId", exclude.getClubId());
+                keys.add("(m.club_id IS NOT DISTINCT FROM :excludeClubId)");
+            }
+            if (exclude.getMatchId() != null) {
+                params.addValue("excludeMatchId", exclude.getMatchId());
+                keys.add("(m.id = :excludeMatchId)");
+            }
         }
         keys.add("random()");
         return " ORDER BY " + String.join(", ", keys);
+    }
+
+    public List<ScreenshotCard> teaserCards(UUID userId) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId);
+        StringBuilder sql = new StringBuilder(CARD_SELECT);
+        sql.append("""
+             WHERE s.id IN (
+                 SELECT picked.id
+                 FROM (
+                     SELECT s2.id, row_number() OVER (
+                         PARTITION BY m2.club_id
+                         ORDER BY random()
+                     ) AS position
+                     FROM screenshot s2
+                     JOIN match m2 ON m2.id = s2.match_id
+                     WHERE m2.club_id IS NOT NULL
+                 ) picked
+                 WHERE picked.position = 1
+             )
+             GROUP BY s.id, m.id, c.id
+             ORDER BY random()
+            """);
+        return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
+    }
+
+    public int registerView(UUID screenshotId, UUID userId, int cooldownSeconds) {
+        return jdbc.update("""
+                WITH accepted AS (
+                    INSERT INTO screenshot_view (screenshot_id, user_id, viewed_at)
+                    VALUES (:screenshotId, :userId, now())
+                    ON CONFLICT (screenshot_id, user_id) DO UPDATE
+                        SET viewed_at = EXCLUDED.viewed_at
+                        WHERE screenshot_view.viewed_at <= EXCLUDED.viewed_at - make_interval(secs => :cooldownSeconds)
+                    RETURNING screenshot_id
+                )
+                UPDATE screenshot
+                SET views = views + 1
+                WHERE id IN (SELECT screenshot_id FROM accepted)
+                """,
+            new MapSqlParameterSource()
+                .addValue("screenshotId", screenshotId)
+                .addValue("userId", userId)
+                .addValue("cooldownSeconds", cooldownSeconds)
+        );
     }
 
     public List<ScreenshotCard> topCards(UUID userId, int limit) {
