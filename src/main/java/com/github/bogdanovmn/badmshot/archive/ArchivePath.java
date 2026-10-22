@@ -10,6 +10,7 @@ import java.util.List;
 @Builder
 class ArchivePath {
     String relPath;
+    String sessionName;
     Integer year;
     Integer month;
     LocalDate matchDate;

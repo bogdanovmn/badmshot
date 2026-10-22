@@ -28,6 +28,9 @@ class ArchiveService {
     @Value("${badmshot.archive-dir}")
     private String archiveDir;
 
+    @Value("${badmshot.archive.read-only:false}")
+    private boolean readOnly;
+
     @Transactional(readOnly = true)
     List<ArchiveYear> tree() {
         return matchRepository.tree();
@@ -62,6 +65,9 @@ class ArchiveService {
 
     @Transactional
     MatchBrief rename(UUID matchId, List<String> players) {
+        if (readOnly) {
+            throw new IllegalStateException("Архив доступен только для чтения");
+        }
         Match match = matchRepository.findById(matchId)
             .orElseThrow(() -> new NoSuchElementException("Матч не найден: " + matchId));
         if (!match.isValid()) {

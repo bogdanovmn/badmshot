@@ -53,14 +53,24 @@ class MatchRepository {
         .players(playerNames(rs))
         .build();
 
+    private static final String MATCH_SELECT = """
+        SELECT m.id, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+               m.duration_seconds, m.size_mbytes, m.validation_error, m.indexed_at,
+               coalesce(c.display_name, c.name) AS club_name
+        FROM match m
+        LEFT JOIN archive_session s ON s.id = m.session_id
+        LEFT JOIN club c ON c.id = s.club_id
+        """;
+
     private static final String BRIEF_SELECT = """
-        SELECT m.id, m.rel_path, m.year, m.month, m.match_date, m.club_id, m.tournament,
+        SELECT m.id, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
                m.duration_seconds, m.size_mbytes, m.validation_error,
                coalesce(c.display_name, c.name) AS club_name,
                array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
                    FILTER (WHERE root_player.id IS NOT NULL) AS players
         FROM match m
-        LEFT JOIN club c ON c.id = m.club_id
+        LEFT JOIN archive_session s ON s.id = m.session_id
+        LEFT JOIN club c ON c.id = s.club_id
         LEFT JOIN match_player mp ON mp.match_id = m.id
         LEFT JOIN player p ON p.id = mp.player_id
         LEFT JOIN player root_player ON root_player.id = coalesce(p.alias_of_player_id, p.id)
@@ -68,25 +78,12 @@ class MatchRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public UUID upsertMeta(
-        String relPath,
-        Integer year,
-        Integer month,
-        LocalDate matchDate,
-        UUID clubId,
-        boolean tournament,
-        int sizeMbytes,
-        String validationError
-    ) {
+    public UUID upsertMeta(String relPath, UUID sessionId, int sizeMbytes, String validationError) {
         return jdbc.queryForObject("""
-                INSERT INTO match (rel_path, year, month, match_date, club_id, tournament, size_mbytes, validation_error)
-                VALUES (:relPath, :year, :month, :matchDate, :clubId, :tournament, :sizeMbytes, :validationError)
+                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error)
+                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError)
                 ON CONFLICT (rel_path) DO UPDATE SET
-                    year = EXCLUDED.year,
-                    month = EXCLUDED.month,
-                    match_date = EXCLUDED.match_date,
-                    club_id = EXCLUDED.club_id,
-                    tournament = EXCLUDED.tournament,
+                    session_id = EXCLUDED.session_id,
                     size_mbytes = EXCLUDED.size_mbytes,
                     validation_error = EXCLUDED.validation_error,
                     indexed_at = now()
@@ -94,13 +91,29 @@ class MatchRepository {
                 """,
             new MapSqlParameterSource()
                 .addValue("relPath", relPath)
-                .addValue("year", year)
-                .addValue("month", month)
-                .addValue("matchDate", matchDate)
-                .addValue("clubId", clubId)
-                .addValue("tournament", tournament)
+                .addValue("sessionId", sessionId)
                 .addValue("sizeMbytes", sizeMbytes)
                 .addValue("validationError", validationError),
+            UUID.class
+        );
+    }
+
+    public UUID insertImported(
+        UUID sessionId,
+        String relPath,
+        Integer durationSeconds,
+        int sizeMbytes
+    ) {
+        return jdbc.queryForObject("""
+                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes)
+                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes)
+                RETURNING id
+                """,
+            new MapSqlParameterSource()
+                .addValue("sessionId", sessionId)
+                .addValue("relPath", relPath)
+                .addValue("durationSeconds", durationSeconds)
+                .addValue("sizeMbytes", sizeMbytes),
             UUID.class
         );
     }
@@ -144,7 +157,8 @@ class MatchRepository {
         ) > 0;
     }
 
-    public void updateRelPath(UUID matchId, String relPath) {        jdbc.update("""
+    public void updateRelPath(UUID matchId, String relPath) {
+        jdbc.update("""
                 UPDATE match
                 SET rel_path = :relPath
                 WHERE id = :matchId
@@ -154,10 +168,9 @@ class MatchRepository {
     }
 
     public Optional<Match> findById(UUID matchId) {
-        return jdbc.query("""
-                SELECT m.*, coalesce(c.display_name, c.name) AS club_name
-                FROM match m
-                LEFT JOIN club c ON c.id = m.club_id
+        return jdbc.query(
+            MATCH_SELECT + """
+
                 WHERE m.id = :matchId
                 """,
             Map.of("matchId", matchId),
@@ -166,12 +179,11 @@ class MatchRepository {
     }
 
     public List<Match> validWithoutScreenshots(int limit) {
-        return jdbc.query("""
-                SELECT m.*, coalesce(c.display_name, c.name) AS club_name
-                FROM match m
-                LEFT JOIN club c ON c.id = m.club_id
+        return jdbc.query(
+            MATCH_SELECT + """
+
                 WHERE m.validation_error IS NULL
-                ORDER BY m.match_date, m.rel_path
+                ORDER BY s.match_date, m.rel_path
                 LIMIT :limit
                 """,
             Map.of("limit", limit),
@@ -193,15 +205,15 @@ class MatchRepository {
             .addValue("limit", limit)
             .addValue("offset", offset);
         if (year != null) {
-            sql.append(" AND m.year = :year");
+            sql.append(" AND s.year = :year");
             params.addValue("year", year);
         }
         if (month != null) {
-            sql.append(" AND m.month = :month");
+            sql.append(" AND s.month = :month");
             params.addValue("month", month);
         }
         if (clubId != null) {
-            sql.append(" AND m.club_id = :clubId");
+            sql.append(" AND s.club_id = :clubId");
             params.addValue("clubId", clubId);
         }
         if (playerId != null) {
@@ -221,37 +233,43 @@ class MatchRepository {
         }
         sql.append("""
 
-            GROUP BY m.id, c.id
-            ORDER BY m.match_date DESC NULLS LAST, m.rel_path
+            GROUP BY m.id, s.id, c.id
+            ORDER BY s.match_date DESC NULLS LAST, m.rel_path
             LIMIT :limit OFFSET :offset
             """);
         return jdbc.query(sql.toString(), params, MATCH_BRIEF_ROW_MAPPER);
     }
 
     public Optional<MatchBrief> brief(UUID matchId) {
-        return jdbc.query(BRIEF_SELECT + """
+        return jdbc.query(
+            BRIEF_SELECT + """
 
-            WHERE m.id = :matchId
-            GROUP BY m.id, c.id
-            """,
+                WHERE m.id = :matchId
+                GROUP BY m.id, s.id, c.id
+                """,
             Map.of("matchId", matchId),
             MATCH_BRIEF_ROW_MAPPER
         ).stream().findFirst();
     }
 
     public int countBriefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid) {
-        StringBuilder sql = new StringBuilder("SELECT count(*) FROM match m WHERE 1 = 1");
+        StringBuilder sql = new StringBuilder("""
+            SELECT count(*)
+            FROM match m
+            LEFT JOIN archive_session s ON s.id = m.session_id
+            WHERE 1 = 1
+            """);
         MapSqlParameterSource params = new MapSqlParameterSource();
         if (year != null) {
-            sql.append(" AND m.year = :year");
+            sql.append(" AND s.year = :year");
             params.addValue("year", year);
         }
         if (month != null) {
-            sql.append(" AND m.month = :month");
+            sql.append(" AND s.month = :month");
             params.addValue("month", month);
         }
         if (clubId != null) {
-            sql.append(" AND m.club_id = :clubId");
+            sql.append(" AND s.club_id = :clubId");
             params.addValue("clubId", clubId);
         }
         if (playerId != null) {
@@ -274,13 +292,14 @@ class MatchRepository {
 
     public List<ArchiveYear> tree() {
         return jdbc.query("""
-                SELECT year, month,
-                       count(*) AS matches,
-                       count(*) FILTER (WHERE validation_error IS NOT NULL) AS invalid
-                FROM match
-                WHERE year IS NOT NULL
-                GROUP BY year, month
-                ORDER BY year DESC, month DESC
+                SELECT s.year, s.month,
+                       count(m.id) AS matches,
+                       count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid
+                FROM archive_session s
+                JOIN match m ON m.session_id = s.id
+                WHERE s.year IS NOT NULL
+                GROUP BY s.year, s.month
+                ORDER BY s.year DESC, s.month DESC
                 """,
             Map.of(),
             (ResultSetExtractor<List<ArchiveYear>>) rs -> {

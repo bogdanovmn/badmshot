@@ -54,7 +54,7 @@ public class ScreenshotRepository {
 
     private static final String CARD_SELECT = """
         SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.created_at, s.views,
-               m.year, m.month, m.match_date, m.tournament, m.club_id,
+               sess.year, sess.month, sess.match_date, sess.tournament, sess.club_id,
                coalesce(c.display_name, c.name) AS club_name,
                (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) AS likes,
                EXISTS (
@@ -65,7 +65,8 @@ public class ScreenshotRepository {
                    FILTER (WHERE root_player.id IS NOT NULL) AS players
         FROM screenshot s
         JOIN match m ON m.id = s.match_id
-        LEFT JOIN club c ON c.id = m.club_id
+        JOIN archive_session sess ON sess.id = m.session_id
+        LEFT JOIN club c ON c.id = sess.club_id
         LEFT JOIN match_player mp ON mp.match_id = m.id
         LEFT JOIN player p ON p.id = mp.player_id
         LEFT JOIN player root_player ON root_player.id = coalesce(p.alias_of_player_id, p.id)
@@ -87,6 +88,52 @@ public class ScreenshotRepository {
                 .addValue("width", width)
                 .addValue("height", height),
             UUID.class
+        );
+    }
+
+    public UUID insertImported(
+        UUID id,
+        UUID matchId,
+        int timecodeSeconds,
+        byte[] image,
+        String format,
+        int width,
+        int height
+    ) {
+        jdbc.update("""
+                INSERT INTO screenshot (id, match_id, timecode_seconds, image, image_format, width, height)
+                VALUES (:id, :matchId, :timecodeSeconds, :image, :format, :width, :height)
+                """,
+            new MapSqlParameterSource()
+                .addValue("id", id)
+                .addValue("matchId", matchId)
+                .addValue("timecodeSeconds", timecodeSeconds)
+                .addValue("image", image, Types.BINARY)
+                .addValue("format", format)
+                .addValue("width", width)
+                .addValue("height", height)
+        );
+        return id;
+    }
+
+    public List<ScreenshotExport> exportBySession(UUID sessionId) {
+        return jdbc.query("""
+                SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.image
+                FROM screenshot s
+                JOIN match m ON m.id = s.match_id
+                WHERE m.session_id = :sessionId
+                ORDER BY m.rel_path, s.timecode_seconds
+                """,
+            Map.of("sessionId", sessionId),
+            (rs, rowNum) -> ScreenshotExport.builder()
+                .id(UUID.fromString(rs.getString("id")))
+                .matchId(UUID.fromString(rs.getString("match_id")))
+                .timecodeSeconds(rs.getInt("timecode_seconds"))
+                .imageFormat(rs.getString("image_format"))
+                .width(rs.getInt("width"))
+                .height(rs.getInt("height"))
+                .data(rs.getBytes("image"))
+                .build()
         );
     }
 
@@ -165,7 +212,7 @@ public class ScreenshotRepository {
         applyFilter(sql, params, filter);
         sql.append("""
 
-            GROUP BY s.id, m.id, c.id
+            GROUP BY s.id, m.id, sess.id, c.id
             """);
         sql.append(randomOrder(params, exclude));
         sql.append("""
@@ -183,7 +230,7 @@ public class ScreenshotRepository {
             }
             if (exclude.getClubId() != null) {
                 params.addValue("excludeClubId", exclude.getClubId());
-                keys.add("(m.club_id IS NOT DISTINCT FROM :excludeClubId)");
+                keys.add("(sess.club_id IS NOT DISTINCT FROM :excludeClubId)");
             }
             if (exclude.getMatchId() != null) {
                 params.addValue("excludeMatchId", exclude.getMatchId());
@@ -203,16 +250,17 @@ public class ScreenshotRepository {
                  SELECT picked.id
                  FROM (
                      SELECT s2.id, row_number() OVER (
-                         PARTITION BY m2.club_id
+                         PARTITION BY sess2.club_id
                          ORDER BY random()
                      ) AS position
                      FROM screenshot s2
                      JOIN match m2 ON m2.id = s2.match_id
-                     WHERE m2.club_id IS NOT NULL
+                     JOIN archive_session sess2 ON sess2.id = m2.session_id
+                     WHERE sess2.club_id IS NOT NULL
                  ) picked
                  WHERE picked.position = 1
              )
-             GROUP BY s.id, m.id, c.id
+             GROUP BY s.id, m.id, sess.id, c.id
              ORDER BY random()
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
@@ -246,7 +294,7 @@ public class ScreenshotRepository {
         StringBuilder sql = new StringBuilder(CARD_SELECT);
         sql.append("""
 
-            GROUP BY s.id, m.id, c.id
+            GROUP BY s.id, m.id, sess.id, c.id
             ORDER BY likes DESC, s.created_at DESC
             LIMIT :limit
             """);
@@ -261,7 +309,7 @@ public class ScreenshotRepository {
         sql.append("""
 
             JOIN screenshot_like sl ON sl.screenshot_id = s.id AND sl.user_id = :userId
-            GROUP BY s.id, m.id, c.id, sl.created_at
+            GROUP BY s.id, m.id, sess.id, c.id, sl.created_at
             ORDER BY sl.created_at DESC
             LIMIT :limit
             """);
@@ -276,7 +324,7 @@ public class ScreenshotRepository {
         sql.append("""
 
             WHERE s.id = :id
-            GROUP BY s.id, m.id, c.id
+            GROUP BY s.id, m.id, sess.id, c.id
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER).stream().findFirst();
     }
@@ -304,7 +352,7 @@ public class ScreenshotRepository {
         List<UUID> clubs = filter.clubsOrEmpty();
         List<UUID> players = filter.playersOrEmpty();
         if (!clubs.isEmpty()) {
-            sql.append(" WHERE m.club_id IN (:clubs)");
+            sql.append(" WHERE sess.club_id IN (:clubs)");
             params.addValue("clubs", clubs);
         } else {
             sql.append(" WHERE 1 = 1");

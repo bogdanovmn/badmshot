@@ -34,6 +34,7 @@ class ArchiveIndexTask {
     private final ArchivePathParser pathParser;
     private final ClubRepository clubRepository;
     private final PlayerRepository playerRepository;
+    private final ArchiveSessionRepository sessionRepository;
     private final MatchRepository matchRepository;
     private final ScreenshotRepository screenshotRepository;
     private final ScreenshotProducer screenshotProducer;
@@ -71,20 +72,27 @@ class ArchiveIndexTask {
 
         UUID clubId = null;
         List<UUID> playerIds = List.of();
-        if (parsed.valid() && parsed.getClub() != null) {
+        if (parsed.getClub() != null) {
             clubId = clubRepository.upsert(parsed.getClub());
+        }
+        if (parsed.valid()) {
             playerIds = parsed.getPlayers().stream()
                 .map(playerRepository::upsert)
                 .collect(Collectors.toList());
         }
 
+        UUID sessionId = parsed.getSessionName() == null
+            ? null
+            : sessionRepository.upsert(
+                parsed.getSessionName(),
+                parsed.getMatchDate(),
+                clubId,
+                parsed.isTournament()
+            );
+
         UUID matchId = matchRepository.upsertMeta(
             parsed.getRelPath(),
-            parsed.getYear(),
-            parsed.getMonth(),
-            parsed.getMatchDate(),
-            clubId,
-            parsed.isTournament(),
+            sessionId,
             sizeMbytes,
             parsed.getValidationError()
         );

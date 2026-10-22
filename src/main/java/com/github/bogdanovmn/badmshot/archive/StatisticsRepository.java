@@ -28,14 +28,15 @@ class StatisticsRepository {
 
     public ArchiveStats stats() {
         List<ArchiveYearStat> years = jdbc.query("""
-                SELECT year, month,
+                SELECT s.year, s.month,
                        count(*) AS matches,
-                       coalesce(sum(size_mbytes), 0) AS size_mbytes,
-                       coalesce(sum(duration_seconds), 0) AS duration_seconds
-                FROM match
-                WHERE validation_error IS NULL AND year IS NOT NULL
-                GROUP BY year, month
-                ORDER BY year DESC, month DESC
+                       coalesce(sum(m.size_mbytes), 0) AS size_mbytes,
+                       coalesce(sum(m.duration_seconds), 0) AS duration_seconds
+                FROM match m
+                JOIN archive_session s ON s.id = m.session_id
+                WHERE m.validation_error IS NULL AND s.year IS NOT NULL
+                GROUP BY s.year, s.month
+                ORDER BY s.year DESC, s.month DESC
                 """,
             Map.of(),
             (ResultSetExtractor<List<ArchiveYearStat>>) rs -> {
@@ -68,7 +69,8 @@ class StatisticsRepository {
                        coalesce(sum(m.size_mbytes), 0) AS size_mbytes,
                        coalesce(sum(m.duration_seconds), 0) AS duration_seconds
                 FROM match m
-                JOIN club c ON c.id = m.club_id
+                JOIN archive_session s ON s.id = m.session_id
+                JOIN club c ON c.id = s.club_id
                 WHERE m.validation_error IS NULL
                 GROUP BY c.id, c.name, c.display_name
                 ORDER BY matches DESC, name

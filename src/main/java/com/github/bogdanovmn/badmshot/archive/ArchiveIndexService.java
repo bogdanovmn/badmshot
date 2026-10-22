@@ -32,18 +32,21 @@ class ArchiveIndexService {
     private final String defaultFormat;
     private final String playerPath;
 
+    @Value("${badmshot.index.enabled:true}")
+    private boolean indexEnabled;
+
     public ArchiveIndexService(
         JobService jobService,
         ArchiveIndexTask task,
         @Value("${badmshot.archive-dir}") String archiveDir,
-        @Value("${badmshot.index.screenshots-count:12}") int defaultCount,
-        @Value("${badmshot.index.margin-seconds:30}") int defaultMarginSeconds,
-        @Value("${badmshot.index.scale-percent:50}") int defaultScalePercent,
-        @Value("${badmshot.index.quality:75}") int defaultQuality,
-        @Value("${badmshot.index.threads:2}") int defaultThreads,
-        @Value("${badmshot.index.player:ffmpeg}") String defaultPlayer,
-        @Value("${badmshot.index.format:webp}") String defaultFormat,
-        @Value("${badmshot.video.player-path:ffmpeg}") String playerPath
+        @Value("${badmshot.index.screenshots-count}") int defaultCount,
+        @Value("${badmshot.index.margin-seconds}") int defaultMarginSeconds,
+        @Value("${badmshot.index.scale-percent}") int defaultScalePercent,
+        @Value("${badmshot.index.quality}") int defaultQuality,
+        @Value("${badmshot.index.threads}") int defaultThreads,
+        @Value("${badmshot.index.player}") String defaultPlayer,
+        @Value("${badmshot.index.format}") String defaultFormat,
+        @Value("${badmshot.video.player-path}") String playerPath
     ) {
         this.jobService = jobService;
         this.task = task;
@@ -59,6 +62,9 @@ class ArchiveIndexService {
     }
 
     public Job start(IndexRequest request) {
+        if (!indexEnabled) {
+            throw new IllegalStateException("Индексация отключена");
+        }
         IndexOptions options = IndexOptions.builder()
             .mode(value(request.getMode(), IndexMode.META))
             .archiveDir(archiveDir)

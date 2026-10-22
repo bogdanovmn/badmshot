@@ -11,6 +11,10 @@ spring:
       minimum-idle: 3
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
 
 security.roles.application-id-prefix: badmshot
 
@@ -19,11 +23,18 @@ jwt:
 
 badmshot:
   archive-dir: ${BADMSHOT_ARCHIVE_DIR:}
+  archive:
+    read-only: ${BADMSHOT_ARCHIVE_READ_ONLY:false}
+  export:
+    enabled: ${BADMSHOT_EXPORT_ENABLED:true}
+  import:
+    enabled: ${BADMSHOT_IMPORT_ENABLED:true}
   video:
     player: ${BADMSHOT_VIDEO_PLAYER:ffmpeg}
     player-path: ${BADMSHOT_VIDEO_PLAYER_PATH:ffmpeg}
     ffprobe-path: ${BADMSHOT_FFPROBE_PATH:ffprobe}
   index:
+    enabled: ${BADMSHOT_INDEX_ENABLED:true}
     screenshots-count: 10
     margin-seconds: 7
     scale-percent: 100

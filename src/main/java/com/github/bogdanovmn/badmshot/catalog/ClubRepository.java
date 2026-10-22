@@ -57,9 +57,10 @@ public class ClubRepository {
                 WHERE EXISTS (
                     SELECT 1
                     FROM match m
+                    JOIN archive_session s ON s.id = m.session_id
                     JOIN match_player mp ON mp.match_id = m.id
                     JOIN player p ON p.id = mp.player_id
-                    WHERE m.club_id = c.id
+                    WHERE s.club_id = c.id
                       AND coalesce(p.alias_of_player_id, p.id) = :playerId
                 )
                 ORDER BY coalesce(c.display_name, c.name)
@@ -98,7 +99,8 @@ public class ClubRepository {
         return jdbc.query("""
                 SELECT c.id, coalesce(nullif(c.display_name, ''), c.name) AS label, count(m.id) AS matches
                 FROM club c
-                JOIN match m ON m.club_id = c.id
+                JOIN archive_session s ON s.club_id = c.id
+                JOIN match m ON m.session_id = s.id
                 GROUP BY c.id, c.name, c.display_name
                 ORDER BY label
                 """,

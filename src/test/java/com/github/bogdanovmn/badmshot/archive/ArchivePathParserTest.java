@@ -25,6 +25,7 @@ class ArchivePathParserTest {
         assertEquals(5, path.getMonth().intValue());
         assertEquals(LocalDate.of(2023, 5, 14), path.getMatchDate());
         assertEquals("badminton-club", path.getClub());
+        assertEquals("2023-05-14-badminton-club", path.getSessionName());
         assertFalse(path.isTournament());
         assertEquals(List.of("Ivanov", "Petrov"), path.getPlayers());
     }
@@ -38,6 +39,7 @@ class ArchivePathParserTest {
         assertTrue(path.valid(), path.getValidationError());
         assertTrue(path.isTournament());
         assertEquals("badminton-club", path.getClub());
+        assertEquals("2023-05-20-t-badminton-club", path.getSessionName());
         assertEquals(4, path.getPlayers().size());
     }
 

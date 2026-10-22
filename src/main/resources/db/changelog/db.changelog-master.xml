@@ -6,8 +6,5 @@
             https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <include file="db/changelog/001-initial.xml"/>
-    <include file="db/changelog/006-frame-effects.xml"/>
-    <include file="db/changelog/007-screenshot-views.xml"/>
-    <include file="db/changelog/009-player-name-trgm-index.xml"/>
 
 </databaseChangeLog>

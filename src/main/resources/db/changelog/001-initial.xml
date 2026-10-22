@@ -8,6 +8,7 @@
     <changeSet id="001-extensions-and-users" author="badmshot">
         <sql>
             CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+            CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
             CREATE TABLE app_user (
                 id uuid PRIMARY KEY,
@@ -40,27 +41,43 @@
             CREATE INDEX player_search_vector_idx ON player USING gin (search_vector);
             CREATE UNIQUE INDEX player_alias_of_uniq ON player (alias_of_player_id)
                 WHERE alias_of_player_id IS NOT NULL;
+            CREATE INDEX i_player__name_trgm ON player
+                USING GIN (
+                    LOWER(coalesce(nullif(display_name, ''), name)) gin_trgm_ops
+                );
         </sql>
     </changeSet>
 
-    <changeSet id="003-matches" author="badmshot">
+    <changeSet id="003-archive-sessions-and-matches" author="badmshot">
         <sql>
-            CREATE TABLE match (
+            CREATE TABLE archive_session (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                rel_path varchar(1000) NOT NULL UNIQUE,
-                year smallint,
-                month smallint,
+                name varchar(300) NOT NULL UNIQUE,
                 match_date date,
+                year smallint GENERATED ALWAYS AS (
+                    extract(year FROM match_date)::smallint
+                ) STORED,
+                month smallint GENERATED ALWAYS AS (
+                    extract(month FROM match_date)::smallint
+                ) STORED,
                 club_id uuid REFERENCES club(id),
                 tournament boolean NOT NULL DEFAULT false,
+                indexed_at timestamp NOT NULL DEFAULT now()
+            );
+            CREATE INDEX archive_session_year_month_idx ON archive_session (year, month);
+            CREATE INDEX archive_session_club_idx ON archive_session (club_id);
+            CREATE INDEX archive_session_date_idx ON archive_session (match_date);
+
+            CREATE TABLE match (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                session_id uuid REFERENCES archive_session(id) ON DELETE CASCADE,
+                rel_path varchar(1000) NOT NULL UNIQUE,
                 duration_seconds integer,
                 size_mbytes integer NOT NULL,
                 validation_error text,
                 indexed_at timestamp NOT NULL DEFAULT now()
             );
-            CREATE INDEX match_year_month_idx ON match (year, month);
-            CREATE INDEX match_club_idx ON match (club_id);
-            CREATE INDEX match_date_idx ON match (match_date);
+            CREATE INDEX match_session_idx ON match (session_id);
 
             CREATE TABLE match_player (
                 match_id uuid NOT NULL REFERENCES match(id) ON DELETE CASCADE,
@@ -82,6 +99,7 @@
                 image_format varchar(10) NOT NULL,
                 width integer NOT NULL,
                 height integer NOT NULL,
+                views bigint NOT NULL DEFAULT 0,
                 created_at timestamp NOT NULL DEFAULT now()
             );
             CREATE INDEX screenshot_match_idx ON screenshot (match_id);
@@ -94,6 +112,14 @@
             );
             CREATE INDEX screenshot_like_user_idx ON screenshot_like (user_id);
             CREATE INDEX screenshot_like_screenshot_idx ON screenshot_like (screenshot_id);
+
+            CREATE TABLE screenshot_view (
+                screenshot_id uuid NOT NULL REFERENCES screenshot(id) ON DELETE CASCADE,
+                user_id uuid NOT NULL REFERENCES app_user(id),
+                viewed_at timestamp NOT NULL DEFAULT now(),
+                PRIMARY KEY (screenshot_id, user_id)
+            );
+            CREATE INDEX screenshot_view_user_idx ON screenshot_view (user_id);
         </sql>
     </changeSet>
 
@@ -115,6 +141,30 @@
                 finished_at timestamp
             );
             CREATE INDEX job_type_status_idx ON job (type, status);
+        </sql>
+    </changeSet>
+
+    <changeSet id="006-frame-effects" author="badmshot">
+        <sql>
+            CREATE TABLE frame_effects (
+                id smallint PRIMARY KEY CHECK (id = 1),
+                settings jsonb NOT NULL,
+                updated_at timestamp NOT NULL DEFAULT now()
+            );
+
+            INSERT INTO frame_effects (id, settings)
+            VALUES (1, '{
+                "halftone": true,
+                "halftoneStrength": 3,
+                "blur": true,
+                "blurStrength": 0,
+                "pixelate": true,
+                "pixelStrength": 0,
+                "pixelColors": 10,
+                "transitionEnabled": true,
+                "transitionDuration": 3000,
+                "transitionPixels": 100
+            }'::jsonb);
         </sql>
     </changeSet>
 

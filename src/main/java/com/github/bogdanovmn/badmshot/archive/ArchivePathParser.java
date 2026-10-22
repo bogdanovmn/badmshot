@@ -82,6 +82,7 @@ class ArchivePathParser {
 
         return ArchivePath.builder()
             .relPath(normalized)
+            .sessionName(parts[2])
             .year(year)
             .month(month)
             .matchDate(matchDate)

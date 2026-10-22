@@ -149,9 +149,10 @@ public class PlayerRepository {
             sql.append("""
                  AND EXISTS (
                     SELECT 1
-                    FROM match_player mp
-                    JOIN match m ON m.id = mp.match_id
-                    WHERE m.club_id = :clubId
+                     FROM match_player mp
+                     JOIN match m ON m.id = mp.match_id
+                     JOIN archive_session s ON s.id = m.session_id
+                     WHERE s.club_id = :clubId
                       AND (mp.player_id = p.id OR mp.player_id = a.id)
                  )
                 """);

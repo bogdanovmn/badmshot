@@ -40,6 +40,9 @@ class ArchiveIndexTaskTest {
     private PlayerRepository playerRepository;
 
     @Mock
+    private ArchiveSessionRepository sessionRepository;
+
+    @Mock
     private MatchRepository matchRepository;
 
     @Mock
@@ -65,6 +68,7 @@ class ArchiveIndexTaskTest {
             new ArchivePathParser(),
             clubRepository,
             playerRepository,
+            sessionRepository,
             matchRepository,
             screenshotRepository,
             screenshotProducer,
@@ -82,6 +86,7 @@ class ArchiveIndexTaskTest {
         Files.write(matchFile, new byte[0]);
 
         UUID clubId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
         UUID matchId = UUID.randomUUID();
         UUID bogdanovId = UUID.randomUUID();
         UUID polyakovId = UUID.randomUUID();
@@ -93,10 +98,12 @@ class ArchiveIndexTaskTest {
         );
 
         when(clubRepository.upsert("badminton-club")).thenReturn(clubId);
+        when(sessionRepository.upsert(anyString(), any(), any(), anyBoolean()))
+            .thenReturn(sessionId);
         when(playerRepository.upsert(anyString()))
             .thenAnswer(invocation -> playerIds.get(invocation.getArgument(0, String.class)));
         when(matchRepository.upsertMeta(
-            anyString(), any(), any(), any(), any(), anyBoolean(), anyInt(), any()
+            anyString(), any(), anyInt(), any()
         )).thenReturn(matchId);
 
         task.run(

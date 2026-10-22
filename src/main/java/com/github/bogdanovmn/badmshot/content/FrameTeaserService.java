@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-class FrameTeaserService {
+public class FrameTeaserService {
 
     private static final UUID ANONYMOUS_USER = new UUID(0, 0);
     private static final String TEASER_KEY = "teaser";
@@ -37,5 +37,9 @@ class FrameTeaserService {
 
     boolean contains(UUID id) {
         return cards().stream().anyMatch(card -> card.getId().equals(id));
+    }
+
+    public void invalidate() {
+        teaser.invalidateAll();
     }
 }

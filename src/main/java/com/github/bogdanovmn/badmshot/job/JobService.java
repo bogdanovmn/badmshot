@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -17,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 public class JobService {
 
     public static final String TYPE_INDEX = "index";
+    public static final String TYPE_IMPORT = "import";
 
     private final JobRepository jobRepository;
     private final ExecutorService jobExecutor;
@@ -36,12 +39,16 @@ public class JobService {
     }
 
     public Job start(String type, Map<String, Object> params, JobTask task) {
+        return start(type, JobPhase.META, params, task);
+    }
+
+    public Job start(String type, JobPhase phase, Map<String, Object> params, JobTask task) {
         jobRepository.markStaleStuck(type, staleTimeoutSeconds);
         jobRepository.findActive(type).ifPresent(active -> {
             throw new JobConflictException("Задача уже выполняется: " + active.getId());
         });
 
-        UUID jobId = jobRepository.create(type, toJson(params), JobPhase.META);
+        UUID jobId = jobRepository.create(type, toJson(params), phase);
         Context context = new Context(jobId);
         jobExecutor.submit(() -> execute(jobId, task, context));
         return jobRepository.findById(jobId).orElseThrow();
@@ -61,6 +68,11 @@ public class JobService {
         jobRepository.requestCancel(job.getId());
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateProgressNow(UUID jobId, int processedFiles, int screenshotsCreated) {
+        jobRepository.updateProgress(jobId, processedFiles, screenshotsCreated);
+    }
+
     private void execute(UUID jobId, JobTask task, JobContext context) {
         try {
             task.run(context);
@@ -69,6 +81,8 @@ public class JobService {
             } else {
                 jobRepository.finish(jobId, JobStatus.COMPLETED, null);
             }
+        } catch (JobCancelledException e) {
+            jobRepository.finish(jobId, JobStatus.CANCELLED, null);
         } catch (Exception e) {
             log.error("Job {} failed: {}", jobId, e.getMessage(), e);
             jobRepository.finish(jobId, JobStatus.FAILED, exceptionMessage(e));

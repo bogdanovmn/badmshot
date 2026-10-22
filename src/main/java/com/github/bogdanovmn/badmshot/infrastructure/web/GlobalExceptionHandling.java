@@ -13,6 +13,7 @@ import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Arrays;
@@ -50,6 +51,11 @@ class GlobalExceptionHandling {
     })
     public ResponseEntity<ExceptionResponse> notFoundException(HttpServletRequest req, Exception ex) throws Exception {
         return exceptionResponse(req, ex, HttpStatus.NOT_FOUND.value());
+    }
+
+    @ExceptionHandler(value = MaxUploadSizeExceededException.class)
+    public ResponseEntity<ExceptionResponse> tooLarge(HttpServletRequest req, Exception ex) {
+        return exceptionResponse(req, ex, HttpStatus.PAYLOAD_TOO_LARGE.value());
     }
 
     @ExceptionHandler(value = {
