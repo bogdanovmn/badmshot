@@ -79,7 +79,7 @@ class ArchiveIndexTaskTest {
     @Test
     void keepsPlayersWithTheSameNameInEveryPosition() throws Exception {
         Path matchFile = archiveDir.resolve(
-            "2026/2026-05/2026-05-17-t-badminton-club/"
+            "games/2026/2026-05/2026-05-17-t-badminton-club/"
                 + "2026-05-17-t-badminton-club--bogdanovM-polyakovE-kulaginA-kulaginA.mp4"
         );
         Files.createDirectories(matchFile.getParent());
@@ -98,12 +98,12 @@ class ArchiveIndexTaskTest {
         );
 
         when(clubRepository.upsert("badminton-club")).thenReturn(clubId);
-        when(sessionRepository.upsert(anyString(), any(), any(), anyBoolean()))
+        when(sessionRepository.upsert(anyString(), any(), any(), anyBoolean(), any()))
             .thenReturn(sessionId);
         when(playerRepository.upsert(anyString()))
             .thenAnswer(invocation -> playerIds.get(invocation.getArgument(0, String.class)));
         when(matchRepository.upsertMeta(
-            anyString(), any(), anyInt(), any()
+            anyString(), any(), anyInt(), any(), any()
         )).thenReturn(matchId);
 
         task.run(

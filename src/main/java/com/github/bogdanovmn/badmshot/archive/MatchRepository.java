@@ -25,6 +25,7 @@ class MatchRepository {
 
     private static final RowMapper<Match> MATCH_ROW_MAPPER = (rs, rowNum) -> Match.builder()
         .id(UUID.fromString(rs.getString("id")))
+        .type(ArchiveType.valueOf(rs.getString("type")))
         .relPath(rs.getString("rel_path"))
         .year((Integer) rs.getObject("year"))
         .month((Integer) rs.getObject("month"))
@@ -40,6 +41,7 @@ class MatchRepository {
 
     private static final RowMapper<MatchBrief> MATCH_BRIEF_ROW_MAPPER = (rs, rowNum) -> MatchBrief.builder()
         .id(UUID.fromString(rs.getString("id")))
+        .type(ArchiveType.valueOf(rs.getString("type")))
         .relPath(rs.getString("rel_path"))
         .year((Integer) rs.getObject("year"))
         .month((Integer) rs.getObject("month"))
@@ -54,7 +56,7 @@ class MatchRepository {
         .build();
 
     private static final String MATCH_SELECT = """
-        SELECT m.id, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+        SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
                m.duration_seconds, m.size_mbytes, m.validation_error, m.indexed_at,
                coalesce(c.display_name, c.name) AS club_name
         FROM match m
@@ -63,7 +65,7 @@ class MatchRepository {
         """;
 
     private static final String BRIEF_SELECT = """
-        SELECT m.id, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+        SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
                m.duration_seconds, m.size_mbytes, m.validation_error,
                coalesce(c.display_name, c.name) AS club_name,
                array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
@@ -78,14 +80,21 @@ class MatchRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public UUID upsertMeta(String relPath, UUID sessionId, int sizeMbytes, String validationError) {
+    public UUID upsertMeta(
+        String relPath,
+        UUID sessionId,
+        int sizeMbytes,
+        String validationError,
+        ArchiveType type
+    ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error)
-                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError)
+                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error, type)
+                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError, :type)
                 ON CONFLICT (rel_path) DO UPDATE SET
                     session_id = EXCLUDED.session_id,
                     size_mbytes = EXCLUDED.size_mbytes,
                     validation_error = EXCLUDED.validation_error,
+                    type = EXCLUDED.type,
                     indexed_at = now()
                 RETURNING id
                 """,
@@ -93,7 +102,8 @@ class MatchRepository {
                 .addValue("relPath", relPath)
                 .addValue("sessionId", sessionId)
                 .addValue("sizeMbytes", sizeMbytes)
-                .addValue("validationError", validationError),
+                .addValue("validationError", validationError)
+                .addValue("type", type.name()),
             UUID.class
         );
     }
@@ -102,18 +112,20 @@ class MatchRepository {
         UUID sessionId,
         String relPath,
         Integer durationSeconds,
-        int sizeMbytes
+        int sizeMbytes,
+        ArchiveType type
     ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes)
-                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes)
+                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes, type)
+                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes, :type)
                 RETURNING id
                 """,
             new MapSqlParameterSource()
                 .addValue("sessionId", sessionId)
                 .addValue("relPath", relPath)
                 .addValue("durationSeconds", durationSeconds)
-                .addValue("sizeMbytes", sizeMbytes),
+                .addValue("sizeMbytes", sizeMbytes)
+                .addValue("type", type.name()),
             UUID.class
         );
     }
@@ -197,6 +209,7 @@ class MatchRepository {
         UUID clubId,
         UUID playerId,
         Boolean invalid,
+        ArchiveType type,
         int limit,
         int offset
     ) {
@@ -204,6 +217,10 @@ class MatchRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("limit", limit)
             .addValue("offset", offset);
+        if (type != null) {
+            sql.append(" AND m.type = :type");
+            params.addValue("type", type.name());
+        }
         if (year != null) {
             sql.append(" AND s.year = :year");
             params.addValue("year", year);
@@ -252,7 +269,14 @@ class MatchRepository {
         ).stream().findFirst();
     }
 
-    public int countBriefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid) {
+    public int countBriefs(
+        Integer year,
+        Integer month,
+        UUID clubId,
+        UUID playerId,
+        Boolean invalid,
+        ArchiveType type
+    ) {
         StringBuilder sql = new StringBuilder("""
             SELECT count(*)
             FROM match m
@@ -260,6 +284,10 @@ class MatchRepository {
             WHERE 1 = 1
             """);
         MapSqlParameterSource params = new MapSqlParameterSource();
+        if (type != null) {
+            sql.append(" AND m.type = :type");
+            params.addValue("type", type.name());
+        }
         if (year != null) {
             sql.append(" AND s.year = :year");
             params.addValue("year", year);
@@ -290,18 +318,18 @@ class MatchRepository {
         return jdbc.queryForObject(sql.toString(), params, Integer.class);
     }
 
-    public List<ArchiveYear> tree() {
+    public List<ArchiveYear> tree(ArchiveType type) {
         return jdbc.query("""
                 SELECT s.year, s.month,
                        count(m.id) AS matches,
                        count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid
                 FROM archive_session s
                 JOIN match m ON m.session_id = s.id
-                WHERE s.year IS NOT NULL
+                WHERE s.year IS NOT NULL AND s.type = :type
                 GROUP BY s.year, s.month
                 ORDER BY s.year DESC, s.month DESC
                 """,
-            Map.of(),
+            Map.of("type", type.name()),
             (ResultSetExtractor<List<ArchiveYear>>) rs -> {
                 LinkedHashMap<Integer, List<ArchiveMonth>> byYear = new LinkedHashMap<>();
                 while (rs.next()) {

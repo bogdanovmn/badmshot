@@ -44,10 +44,6 @@ class ArchiveExportService {
         if (!session.isExportable()) {
             throw new ArchiveConflictException("Сессия содержит невалидные матчи или матчи без кадров");
         }
-        if (session.getClub() == null) {
-            throw new ArchiveConflictException("У сессии не определён клуб");
-        }
-
         List<ScreenshotExport> screenshots = screenshotRepository.exportBySession(sessionId);
         Map<UUID, List<ScreenshotExport>> byMatch = new LinkedHashMap<>();
         screenshots.forEach(screenshot -> byMatch
@@ -96,6 +92,7 @@ class ArchiveExportService {
         return SessionManifest.builder()
             .formatVersion(FORMAT_VERSION)
             .session(SessionManifestSession.builder()
+                .type(session.getType())
                 .name(session.getName())
                 .matchDate(session.getMatchDate())
                 .club(session.getClub())

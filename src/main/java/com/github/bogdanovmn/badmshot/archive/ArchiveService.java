@@ -32,18 +32,29 @@ class ArchiveService {
     private boolean readOnly;
 
     @Transactional(readOnly = true)
-    List<ArchiveYear> tree() {
-        return matchRepository.tree();
+    List<ArchiveYear> tree(ArchiveType type) {
+        return matchRepository.tree(type);
     }
 
     @Transactional(readOnly = true)
-    MatchPage briefs(Integer year, Integer month, UUID clubId, UUID playerId, Boolean invalid, int limit, int offset) {
+    MatchPage briefs(
+        Integer year,
+        Integer month,
+        UUID clubId,
+        UUID playerId,
+        Boolean invalid,
+        ArchiveType type,
+        int limit,
+        int offset
+    ) {
         UUID canonicalPlayerId = playerId == null
             ? null
             : playerRepository.canonicalId(playerId).orElse(playerId);
         return MatchPage.builder()
-            .total(matchRepository.countBriefs(year, month, clubId, canonicalPlayerId, invalid))
-            .items(matchRepository.briefs(year, month, clubId, canonicalPlayerId, invalid, limit, offset))
+            .total(matchRepository.countBriefs(year, month, clubId, canonicalPlayerId, invalid, type))
+            .items(matchRepository.briefs(
+                year, month, clubId, canonicalPlayerId, invalid, type, limit, offset
+            ))
             .build();
     }
 
@@ -59,8 +70,8 @@ class ArchiveService {
     }
 
     @Transactional(readOnly = true)
-    ArchiveStats stats() {
-        return statisticsRepository.stats();
+    ArchiveStats stats(ArchiveType type) {
+        return statisticsRepository.stats(type);
     }
 
     @Transactional
@@ -76,12 +87,20 @@ class ArchiveService {
         List<String> cleaned = players == null
             ? List.of()
             : players.stream().map(String::trim).filter(name -> !name.isBlank()).toList();
-        if (cleaned.size() != 2 && cleaned.size() != 4) {
+        if (match.getType() == ArchiveType.INDI) {
+            boolean defaultPlayer = cleaned.size() == 1
+                && ArchivePathParser.DEFAULT_INDI_PLAYER.equals(cleaned.get(0));
+            if (cleaned.size() != 2 && !defaultPlayer) {
+                throw new IllegalArgumentException(
+                    "Ожидается 2 игрока (или 1 игрок по умолчанию), получено: " + cleaned.size()
+                );
+            }
+        } else if (cleaned.size() != 2 && cleaned.size() != 4) {
             throw new IllegalArgumentException("Ожидается 2 или 4 игрока, получено: " + cleaned.size());
         }
 
         String relPath = match.getRelPath();
-        String newRelPath = buildRelPath(relPath, cleaned);
+        String newRelPath = buildRelPath(relPath, cleaned, match.getType());
         if (newRelPath.equals(relPath)) {
             return matchRepository.brief(matchId).orElseThrow();
         }
@@ -102,14 +121,25 @@ class ArchiveService {
         return matchRepository.brief(matchId).orElseThrow();
     }
 
-    private String buildRelPath(String relPath, List<String> players) {
+    private String buildRelPath(String relPath, List<String> players, ArchiveType type) {
         int slash = relPath.lastIndexOf('/');
         String parent = slash < 0 ? "" : relPath.substring(0, slash);
         String fileName = relPath.substring(slash + 1);
         int dot = fileName.lastIndexOf('.');
         String extension = dot < 0 ? ".mp4" : fileName.substring(dot);
-        String dateDir = parent.substring(parent.lastIndexOf('/') + 1);
-        String name = dateDir + "--" + String.join("-", players) + extension;
+        String name;
+        if (type == ArchiveType.INDI) {
+            String base = dot < 0 ? fileName : fileName.substring(0, dot);
+            int marker = base.lastIndexOf("-indi");
+            String datePart = marker < 0 ? base : base.substring(0, marker);
+            String suffix = players.size() == 1
+                ? ""
+                : "--" + String.join("-", players);
+            name = datePart + "-indi" + suffix + extension;
+        } else {
+            String dateDir = parent.substring(parent.lastIndexOf('/') + 1);
+            name = dateDir + "--" + String.join("-", players) + extension;
+        }
         return parent.isEmpty() ? name : parent + "/" + name;
     }
 

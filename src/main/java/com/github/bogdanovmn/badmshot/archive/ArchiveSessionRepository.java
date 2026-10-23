@@ -25,6 +25,7 @@ class ArchiveSessionRepository {
 
     private static final RowMapper<ArchiveSession> SESSION_ROW_MAPPER = (rs, rowNum) -> ArchiveSession.builder()
         .id(UUID.fromString(rs.getString("id")))
+        .type(ArchiveType.valueOf(rs.getString("type")))
         .name(rs.getString("name"))
         .matchDate(rs.getObject("match_date", LocalDate.class))
         .year((Integer) rs.getObject("year"))
@@ -42,7 +43,7 @@ class ArchiveSessionRepository {
         .build();
 
     private static final String SESSION_SELECT = """
-        SELECT s.id, s.name, s.match_date, s.year, s.month, s.club_id, s.tournament,
+        SELECT s.id, s.type, s.name, s.match_date, s.year, s.month, s.club_id, s.tournament,
                c.name AS club,
                coalesce(c.display_name, c.name) AS club_name,
                count(m.id) AS matches,
@@ -63,15 +64,15 @@ class ArchiveSessionRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    Optional<ArchivePeriod> latestPeriod() {
+    Optional<ArchivePeriod> latestPeriod(ArchiveType type) {
         return jdbc.query("""
                 SELECT year, month
                 FROM archive_session
-                WHERE year IS NOT NULL
+                WHERE year IS NOT NULL AND type = :type
                 ORDER BY year DESC, month DESC
                 LIMIT 1
                 """,
-            Map.of(),
+            Map.of("type", type.name()),
             (rs, rowNum) -> ArchivePeriod.builder()
                 .year(rs.getInt("year"))
                 .month(rs.getInt("month"))
@@ -90,14 +91,15 @@ class ArchiveSessionRepository {
         ) > 0;
     }
 
-    UUID upsert(String name, LocalDate matchDate, UUID clubId, boolean tournament) {
+    UUID upsert(String name, LocalDate matchDate, UUID clubId, boolean tournament, ArchiveType type) {
         return jdbc.queryForObject("""
-                INSERT INTO archive_session (name, match_date, club_id, tournament)
-                VALUES (:name, :matchDate, :clubId, :tournament)
+                INSERT INTO archive_session (name, match_date, club_id, tournament, type)
+                VALUES (:name, :matchDate, :clubId, :tournament, :type)
                 ON CONFLICT (name) DO UPDATE SET
                     match_date = coalesce(EXCLUDED.match_date, archive_session.match_date),
                     club_id = coalesce(EXCLUDED.club_id, archive_session.club_id),
                     tournament = archive_session.tournament OR EXCLUDED.tournament,
+                    type = EXCLUDED.type,
                     indexed_at = now()
                 RETURNING id
                 """,
@@ -105,22 +107,24 @@ class ArchiveSessionRepository {
                 .addValue("name", name)
                 .addValue("matchDate", matchDate)
                 .addValue("clubId", clubId)
-                .addValue("tournament", tournament),
+                .addValue("tournament", tournament)
+                .addValue("type", type.name()),
             UUID.class
         );
     }
 
-    UUID insert(String name, LocalDate matchDate, UUID clubId, boolean tournament) {
+    UUID insert(String name, LocalDate matchDate, UUID clubId, boolean tournament, ArchiveType type) {
         return jdbc.queryForObject("""
-                INSERT INTO archive_session (name, match_date, club_id, tournament)
-                VALUES (:name, :matchDate, :clubId, :tournament)
+                INSERT INTO archive_session (name, match_date, club_id, tournament, type)
+                VALUES (:name, :matchDate, :clubId, :tournament, :type)
                 RETURNING id
                 """,
             new MapSqlParameterSource()
                 .addValue("name", name)
                 .addValue("matchDate", matchDate)
                 .addValue("clubId", clubId)
-                .addValue("tournament", tournament),
+                .addValue("tournament", tournament)
+                .addValue("type", type.name()),
             UUID.class
         );
     }
@@ -143,12 +147,13 @@ class ArchiveSessionRepository {
         return Optional.of(session.toBuilder().files(files.getOrDefault(session.getId(), List.of())).build());
     }
 
-    List<ArchiveSession> sessions(int year, int month, UUID clubId, UUID playerId) {
+    List<ArchiveSession> sessions(int year, int month, UUID clubId, UUID playerId, ArchiveType type) {
         StringBuilder sql = new StringBuilder(SESSION_SELECT)
-            .append(" WHERE s.year = :year AND s.month = :month");
+            .append(" WHERE s.year = :year AND s.month = :month AND s.type = :type");
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("year", year)
-            .addValue("month", month);
+            .addValue("month", month)
+            .addValue("type", type.name());
         if (clubId != null) {
             sql.append(" AND s.club_id = :clubId");
             params.addValue("clubId", clubId);

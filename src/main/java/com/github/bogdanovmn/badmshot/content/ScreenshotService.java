@@ -68,6 +68,7 @@ class ScreenshotService {
         return ScreenshotFilter.builder()
             .players(playerRepository.canonicalIds(filter.playersOrEmpty()))
             .clubs(filter.clubsOrEmpty())
+            .includeIndi(filter.isIncludeIndi())
             .build();
     }
 

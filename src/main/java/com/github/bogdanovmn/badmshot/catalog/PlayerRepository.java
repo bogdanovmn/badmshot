@@ -1,5 +1,6 @@
 package com.github.bogdanovmn.badmshot.catalog;
 
+import com.github.bogdanovmn.badmshot.archive.ArchiveType;
 import com.github.bogdanovmn.badmshot.common.FullTextQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
@@ -187,7 +188,7 @@ public class PlayerRepository {
         );
     }
 
-    public List<CatalogTag> tags() {
+    public List<CatalogTag> tags(ArchiveType type) {
         return jdbc.query("""
                 SELECT p.id,
                        coalesce(nullif(p.display_name, ''), p.name) AS label,
@@ -196,11 +197,14 @@ public class PlayerRepository {
                     SELECT DISTINCT coalesce(x.alias_of_player_id, x.id) AS root_id, mp.match_id
                     FROM match_player mp
                     JOIN player x ON x.id = mp.player_id
+                    JOIN match m ON m.id = mp.match_id
+                    WHERE m.type = :type
                 ) t
                 JOIN player p ON p.id = t.root_id
                 GROUP BY p.id, p.name, p.display_name
                 ORDER BY label
                 """,
+            Map.of("type", type.name()),
             (rs, rowNum) -> CatalogTag.builder()
                 .id(UUID.fromString(rs.getString("id")))
                 .label(rs.getString("label"))

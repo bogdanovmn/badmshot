@@ -137,12 +137,13 @@ class ArchiveImportReader {
             throw new IllegalArgumentException("Неподдерживаемая версия формата архива");
         }
         SessionManifestSession session = manifest.getSession();
+        ArchiveType type = sessionType(session);
         if (session == null
             || session.getName() == null
             || session.getName().isBlank()
             || session.getMatchDate() == null
-            || session.getClub() == null
-            || session.getClub().isBlank()) {
+            || (type == ArchiveType.GAMES
+                && (session.getClub() == null || session.getClub().isBlank()))) {
             throw new IllegalArgumentException("В архиве отсутствуют обязательные данные сессии");
         }
         if (manifest.getMatches() == null || manifest.getMatches().isEmpty()) {
@@ -157,15 +158,23 @@ class ArchiveImportReader {
                 || match.getRelPath().isBlank()
                 || match.getSizeMbytes() < 0
                 || match.getPlayers() == null
-                || (match.getPlayers().size() != 2 && match.getPlayers().size() != 4)
+                || !validPlayerCount(type, match.getPlayers().size())
                 || match.getScreenshots() == null
                 || match.getScreenshots().isEmpty()) {
                 throw new IllegalArgumentException("Некорректное описание матча");
             }
+            if (type == ArchiveType.INDI
+                && match.getPlayers().size() == 1
+                && !ArchivePathParser.DEFAULT_INDI_PLAYER.equals(match.getPlayers().get(0))) {
+                throw new IllegalArgumentException(
+                    "Для индивидуальной тренировки с одним игроком ожидается "
+                        + ArchivePathParser.DEFAULT_INDI_PLAYER
+                );
+            }
             if (!relPaths.add(match.getRelPath())) {
                 throw new IllegalArgumentException("Дублирующийся матч: " + match.getRelPath());
             }
-            validateMatchPath(match, session);
+            validateMatchPath(match, session, type);
             for (SessionManifestScreenshot screenshot : match.getScreenshots()) {
                 if (screenshot == null
                     || screenshot.getId() == null
@@ -182,17 +191,28 @@ class ArchiveImportReader {
         }
     }
 
-    private void validateMatchPath(SessionManifestMatch match, SessionManifestSession session) {
+    private void validateMatchPath(
+        SessionManifestMatch match,
+        SessionManifestSession session,
+        ArchiveType type
+    ) {
         ArchivePath parsed = pathParser.parse(match.getRelPath());
         if (!parsed.valid()) {
             throw new IllegalArgumentException(
                 "Некорректный путь матча " + match.getRelPath() + ": " + parsed.getValidationError()
             );
         }
-        if (!session.getName().equals(parsed.getSessionName())
-            || !session.getMatchDate().equals(parsed.getMatchDate())
-            || !session.getClub().equals(parsed.getClub())
-            || session.isTournament() != parsed.isTournament()) {
+        boolean sameSession = session.getName().equals(parsed.getSessionName())
+            && parsed.getType() == type;
+        if (sameSession && type == ArchiveType.GAMES) {
+            sameSession = session.getMatchDate().equals(parsed.getMatchDate())
+                && session.getClub().equals(parsed.getClub())
+                && session.isTournament() == parsed.isTournament();
+        } else if (sameSession) {
+            sameSession = session.getMatchDate().getYear() == parsed.getMatchDate().getYear()
+                && session.getMatchDate().getMonth() == parsed.getMatchDate().getMonth();
+        }
+        if (!sameSession) {
             throw new IllegalArgumentException("Матч не соответствует сессии: " + match.getRelPath());
         }
         if (!match.getPlayers().equals(parsed.getPlayers())) {
@@ -220,6 +240,19 @@ class ArchiveImportReader {
         } catch (IOException e) {
             throw new IllegalArgumentException("Не удалось прочитать файл архива: " + entry.getName(), e);
         }
+    }
+
+    private ArchiveType sessionType(SessionManifestSession session) {
+        return session == null || session.getType() == null
+            ? ArchiveType.GAMES
+            : session.getType();
+    }
+
+    private boolean validPlayerCount(ArchiveType type, int size) {
+        if (type == ArchiveType.INDI) {
+            return size == 1 || size == 2;
+        }
+        return size == 2 || size == 4;
     }
 
     private String normalizedFormat(String format) {

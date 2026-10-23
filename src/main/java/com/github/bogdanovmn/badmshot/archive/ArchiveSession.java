@@ -11,6 +11,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 class ArchiveSession {
     UUID id;
+    ArchiveType type;
     String name;
     LocalDate matchDate;
     Integer year;

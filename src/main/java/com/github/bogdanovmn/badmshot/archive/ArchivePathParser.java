@@ -11,48 +11,44 @@ import java.util.regex.Pattern;
 @Component
 class ArchivePathParser {
 
+    static final String DEFAULT_INDI_PLAYER = "misha";
+
     private static final Pattern YEAR = Pattern.compile("(\\d{4})");
     private static final Pattern MONTH_DIR = Pattern.compile("(\\d{4})-(\\d{2})");
     private static final Pattern DATE_DIR = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})-(t-)?(.+)");
+    private static final Pattern INDI_FILE = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})-indi(?:--(.+))?");
 
     public ArchivePath parse(String relPath) {
         String normalized = relPath.replace('\\', '/');
         String[] parts = normalized.split("/");
         List<String> errors = new ArrayList<>();
 
-        if (parts.length != 4) {
-            errors.add("Ожидается структура <год>/<год-месяц>/<год-месяц-день-клуб>/<файл>, получено сегментов: " + parts.length);
-            return ArchivePath.builder()
-                .relPath(normalized)
-                .players(List.of())
-                .validationError(String.join("; ", errors))
-                .build();
+        ArchiveType type = parts.length == 0 ? null : ArchiveType.fromFolder(parts[0]);
+        if (type == null) {
+            errors.add("Неизвестный раздел архива: " + (parts.length == 0 ? "" : parts[0])
+                + ". Ожидается games или indi");
+            return invalid(normalized, null, errors);
         }
 
-        Integer year = parseYear(parts[0], errors);
-        Integer month = null;
-        if (year != null) {
-            Matcher monthDir = MONTH_DIR.matcher(parts[1]);
-            if (monthDir.matches()) {
-                int folderYear = Integer.parseInt(monthDir.group(1));
-                int folderMonth = Integer.parseInt(monthDir.group(2));
-                if (folderYear != year) {
-                    errors.add("Год в папке месяца (" + folderYear + ") не совпадает с годом (" + year + ")");
-                }
-                if (folderMonth < 1 || folderMonth > 12) {
-                    errors.add("Некорректный месяц: " + parts[1]);
-                } else {
-                    month = folderMonth;
-                }
-            } else {
-                errors.add("Некорректное имя папки месяца: " + parts[1]);
-            }
+        return type == ArchiveType.GAMES
+            ? parseGames(normalized, parts, errors)
+            : parseIndi(normalized, parts, errors);
+    }
+
+    private ArchivePath parseGames(String relPath, String[] parts, List<String> errors) {
+        if (parts.length != 5) {
+            errors.add("Ожидается структура games/<год>/<год-месяц>/<год-месяц-день-клуб>/<файл>, получено сегментов: "
+                + parts.length);
+            return invalid(relPath, ArchiveType.GAMES, errors);
         }
+
+        Integer year = parseYear(parts[1], errors);
+        Integer month = parseMonthDir(parts[2], year, errors);
 
         LocalDate matchDate = null;
         String club = null;
         boolean tournament = false;
-        String dateDir = parts[2];
+        String dateDir = parts[3];
         Matcher dateMatcher = DATE_DIR.matcher(dateDir);
         if (dateMatcher.matches()) {
             int dirYear = Integer.parseInt(dateMatcher.group(1));
@@ -60,12 +56,7 @@ class ArchivePathParser {
             int dirDay = Integer.parseInt(dateMatcher.group(3));
             tournament = dateMatcher.group(4) != null;
             club = dateMatcher.group(5);
-            if (year != null && dirYear != year) {
-                errors.add("Год в папке даты (" + dirYear + ") не совпадает с годом (" + year + ")");
-            }
-            if (month != null && dirMonth != month) {
-                errors.add("Месяц в папке даты (" + dirMonth + ") не совпадает с месяцем (" + month + ")");
-            }
+            validateDateParts(dirYear, dirMonth, dirDay, year, month, dateDir, errors);
             try {
                 matchDate = LocalDate.of(dirYear, dirMonth, dirDay);
             } catch (Exception e) {
@@ -75,14 +66,12 @@ class ArchivePathParser {
             errors.add("Некорректное имя папки даты: " + dateDir);
         }
 
-        List<String> players = parsePlayers(parts[3], dateDir, errors);
-        if (players.isEmpty() && errors.isEmpty()) {
-            errors.add("Не удалось определить игроков");
-        }
+        List<String> players = parseGamePlayers(parts[4], dateDir, errors);
 
         return ArchivePath.builder()
-            .relPath(normalized)
-            .sessionName(parts[2])
+            .type(ArchiveType.GAMES)
+            .relPath(relPath)
+            .sessionName(parts[3])
             .year(year)
             .month(month)
             .matchDate(matchDate)
@@ -90,6 +79,60 @@ class ArchivePathParser {
             .tournament(tournament)
             .players(players)
             .validationError(errors.isEmpty() ? null : String.join("; ", errors))
+            .build();
+    }
+
+    private ArchivePath parseIndi(String relPath, String[] parts, List<String> errors) {
+        if (parts.length != 4) {
+            errors.add("Ожидается структура indi/<год>/<год-месяц>/<год-месяц-день-indi[--игрок1-игрок2]>.mp4, "
+                + "получено сегментов: " + parts.length);
+            return invalid(relPath, ArchiveType.INDI, errors);
+        }
+
+        Integer year = parseYear(parts[1], errors);
+        Integer month = parseMonthDir(parts[2], year, errors);
+
+        LocalDate matchDate = null;
+        List<String> players = List.of();
+        String base = stripExtension(parts[3], errors);
+        if (base != null) {
+            Matcher fileMatcher = INDI_FILE.matcher(base);
+            if (fileMatcher.matches()) {
+                int fileYear = Integer.parseInt(fileMatcher.group(1));
+                int fileMonth = Integer.parseInt(fileMatcher.group(2));
+                int fileDay = Integer.parseInt(fileMatcher.group(3));
+                validateDateParts(fileYear, fileMonth, fileDay, year, month, parts[3], errors);
+                try {
+                    matchDate = LocalDate.of(fileYear, fileMonth, fileDay);
+                } catch (Exception e) {
+                    errors.add("Некорректная дата: " + parts[3]);
+                }
+                players = parseIndiPlayers(fileMatcher.group(4), parts[3], errors);
+            } else {
+                errors.add("Имя файла не соответствует формату индивидуальной тренировки: " + parts[3]);
+            }
+        }
+
+        return ArchivePath.builder()
+            .type(ArchiveType.INDI)
+            .relPath(relPath)
+            .sessionName("indi-" + parts[2])
+            .year(year)
+            .month(month)
+            .matchDate(matchDate)
+            .club(null)
+            .tournament(false)
+            .players(players)
+            .validationError(errors.isEmpty() ? null : String.join("; ", errors))
+            .build();
+    }
+
+    private ArchivePath invalid(String relPath, ArchiveType type, List<String> errors) {
+        return ArchivePath.builder()
+            .type(type)
+            .relPath(relPath)
+            .players(List.of())
+            .validationError(String.join("; ", errors))
             .build();
     }
 
@@ -101,17 +144,58 @@ class ArchivePathParser {
         return Integer.parseInt(value);
     }
 
-    private List<String> parsePlayers(String fileName, String dateDir, List<String> errors) {
-        String base = fileName;
+    private Integer parseMonthDir(String value, Integer year, List<String> errors) {
+        Matcher monthDir = MONTH_DIR.matcher(value);
+        if (!monthDir.matches()) {
+            errors.add("Некорректное имя папки месяца: " + value);
+            return null;
+        }
+        int folderYear = Integer.parseInt(monthDir.group(1));
+        int folderMonth = Integer.parseInt(monthDir.group(2));
+        if (year != null && folderYear != year) {
+            errors.add("Год в папке месяца (" + folderYear + ") не совпадает с годом (" + year + ")");
+        }
+        if (folderMonth < 1 || folderMonth > 12) {
+            errors.add("Некорректный месяц: " + value);
+            return null;
+        }
+        return folderMonth;
+    }
+
+    private void validateDateParts(
+        int dateYear,
+        int dateMonth,
+        int dateDay,
+        Integer folderYear,
+        Integer folderMonth,
+        String source,
+        List<String> errors
+    ) {
+        if (folderYear != null && dateYear != folderYear) {
+            errors.add("Год в дате (" + dateYear + ") не совпадает с годом (" + folderYear + "): " + source);
+        }
+        if (folderMonth != null && dateMonth != folderMonth) {
+            errors.add("Месяц в дате (" + dateMonth + ") не совпадает с месяцем (" + folderMonth + "): " + source);
+        }
+    }
+
+    private String stripExtension(String fileName, List<String> errors) {
         int dot = fileName.lastIndexOf('.');
         if (dot < 0) {
             errors.add("Отсутствует расширение файла: " + fileName);
-        } else {
-            String extension = fileName.substring(dot + 1);
-            if (!extension.equalsIgnoreCase("mp4")) {
-                errors.add("Неожиданное расширение файла: " + extension);
-            }
-            base = fileName.substring(0, dot);
+            return null;
+        }
+        String extension = fileName.substring(dot + 1);
+        if (!extension.equalsIgnoreCase("mp4")) {
+            errors.add("Неожиданное расширение файла: " + extension);
+        }
+        return fileName.substring(0, dot);
+    }
+
+    private List<String> parseGamePlayers(String fileName, String dateDir, List<String> errors) {
+        String base = stripExtension(fileName, errors);
+        if (base == null) {
+            return List.of();
         }
 
         String prefix = dateDir + "--";
@@ -136,6 +220,24 @@ class ArchivePathParser {
         }
         if (players.size() != 2 && players.size() != 4) {
             errors.add("Ожидается 2 или 4 игрока, получено: " + players.size());
+        }
+        return players;
+    }
+
+    private List<String> parseIndiPlayers(String playersPart, String fileName, List<String> errors) {
+        if (playersPart == null) {
+            return List.of(DEFAULT_INDI_PLAYER);
+        }
+        List<String> players = new ArrayList<>();
+        for (String name : playersPart.split("-")) {
+            if (name.isBlank()) {
+                errors.add("Пустое имя игрока в: " + fileName);
+                continue;
+            }
+            players.add(name);
+        }
+        if (players.size() != 2) {
+            errors.add("Ожидается ровно 2 игрока, получено: " + players.size());
         }
         return players;
     }

@@ -11,11 +11,13 @@ import java.util.UUID;
 class ScreenshotFilter {
     List<UUID> players;
     List<UUID> clubs;
+    boolean includeIndi;
 
     public static ScreenshotFilter empty() {
         return ScreenshotFilter.builder()
             .players(List.of())
             .clubs(List.of())
+            .includeIndi(false)
             .build();
     }
 

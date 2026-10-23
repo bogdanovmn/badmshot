@@ -43,6 +43,19 @@ class ArchiveImportReaderTest {
     }
 
     @Test
+    void readsIndiArchive() throws IOException {
+        UUID screenshotId = UUID.randomUUID();
+        Path archive = archive(indiManifest(screenshotId), Map.of(screenshotId + ".webp", new byte[]{4, 5}));
+
+        LoadedArchive loaded = reader.read(archive);
+
+        assertEquals(ArchiveType.INDI, loaded.getManifest().getSession().getType());
+        assertEquals("indi-2026-03", loaded.getManifest().getSession().getName());
+        assertEquals(List.of("misha"), loaded.getManifest().getMatches().get(0).getPlayers());
+        assertArrayEquals(new byte[]{4, 5}, loaded.getImages().get(screenshotId));
+    }
+
+    @Test
     void rejectsExtraFiles() throws IOException {
         UUID screenshotId = UUID.randomUUID();
         Path archive = archive(
@@ -72,7 +85,7 @@ class ArchiveImportReaderTest {
             .height(180)
             .build();
         SessionManifestMatch match = SessionManifestMatch.builder()
-            .relPath("2026/2026-05/2026-05-19-lesteh/2026-05-19-lesteh--Ivanov-Petrov.mp4")
+            .relPath("games/2026/2026-05/2026-05-19-lesteh/2026-05-19-lesteh--Ivanov-Petrov.mp4")
             .durationSeconds(120)
             .sizeMbytes(20)
             .players(List.of("Ivanov", "Petrov"))
@@ -84,6 +97,35 @@ class ArchiveImportReaderTest {
                 .name("2026-05-19-lesteh")
                 .matchDate(LocalDate.of(2026, 5, 19))
                 .club("lesteh")
+                .tournament(false)
+                .build()
+            )
+            .matches(List.of(match))
+            .build();
+    }
+
+    private SessionManifest indiManifest(UUID screenshotId) {
+        SessionManifestScreenshot screenshot = SessionManifestScreenshot.builder()
+            .id(screenshotId)
+            .timecodeSeconds(15)
+            .format("webp")
+            .width(320)
+            .height(180)
+            .build();
+        SessionManifestMatch match = SessionManifestMatch.builder()
+            .relPath("indi/2026/2026-03/2026-03-04-indi.mp4")
+            .durationSeconds(300)
+            .sizeMbytes(40)
+            .players(List.of("misha"))
+            .screenshots(List.of(screenshot))
+            .build();
+        return SessionManifest.builder()
+            .formatVersion(1)
+            .session(SessionManifestSession.builder()
+                .type(ArchiveType.INDI)
+                .name("indi-2026-03")
+                .matchDate(LocalDate.of(2026, 3, 1))
+                .club(null)
                 .tournament(false)
                 .build()
             )

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 @Value
 @Builder
 class SessionManifestSession {
+    ArchiveType type;
     String name;
     LocalDate matchDate;
     String club;

@@ -16,8 +16,8 @@ class ArchiveSessionService {
     private final PlayerRepository playerRepository;
 
     @Transactional(readOnly = true)
-    ArchiveSessions sessions(Integer year, Integer month, UUID clubId, UUID playerId) {
-        ArchivePeriod period = period(year, month);
+    ArchiveSessions sessions(Integer year, Integer month, UUID clubId, UUID playerId, ArchiveType type) {
+        ArchivePeriod period = period(year, month, type);
         if (period == null) {
             return ArchiveSessions.builder()
                 .year(null)
@@ -35,14 +35,15 @@ class ArchiveSessionService {
                 period.getYear(),
                 period.getMonth(),
                 clubId,
-                canonicalPlayerId
+                canonicalPlayerId,
+                type
             ))
             .build();
     }
 
-    private ArchivePeriod period(Integer year, Integer month) {
+    private ArchivePeriod period(Integer year, Integer month, ArchiveType type) {
         if (year == null && month == null) {
-            return sessionRepository.latestPeriod().orElse(null);
+            return sessionRepository.latestPeriod(type).orElse(null);
         }
         if (year == null || month == null) {
             throw new IllegalArgumentException("Параметры year и month должны передаваться вместе");

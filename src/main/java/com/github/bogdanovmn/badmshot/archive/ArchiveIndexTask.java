@@ -72,11 +72,12 @@ class ArchiveIndexTask {
     private void indexMeta(JobContext context, Path archiveDir, Path file) {
         Path relative = archiveDir.relativize(file);
         ArchivePath parsed = pathParser.parse(relative.toString());
+        ArchiveType type = parsed.getType() == null ? ArchiveType.GAMES : parsed.getType();
         int sizeMbytes = sizeMbytes(file);
 
         UUID clubId = null;
         List<UUID> playerIds = List.of();
-        if (parsed.getClub() != null) {
+        if (type == ArchiveType.GAMES && parsed.getClub() != null) {
             clubId = clubRepository.upsert(parsed.getClub());
         }
         if (parsed.valid()) {
@@ -89,16 +90,18 @@ class ArchiveIndexTask {
             ? null
             : sessionRepository.upsert(
                 parsed.getSessionName(),
-                parsed.getMatchDate(),
+                parsed.sessionDate(),
                 clubId,
-                parsed.isTournament()
+                parsed.isTournament(),
+                type
             );
 
         UUID matchId = matchRepository.upsertMeta(
             parsed.getRelPath(),
             sessionId,
             sizeMbytes,
-            parsed.getValidationError()
+            parsed.getValidationError(),
+            type
         );
         matchRepository.replacePlayers(matchId, playerIds);
         context.heartbeat();

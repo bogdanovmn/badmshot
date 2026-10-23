@@ -37,9 +37,10 @@ class ArchiveController {
         @RequestParam(name = "year", required = false) Integer year,
         @RequestParam(name = "month", required = false) Integer month,
         @RequestParam(name = "clubId", required = false) UUID clubId,
-        @RequestParam(name = "playerId", required = false) UUID playerId
+        @RequestParam(name = "playerId", required = false) UUID playerId,
+        @RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type
     ) {
-        return sessionService.sessions(year, month, clubId, playerId);
+        return sessionService.sessions(year, month, clubId, playerId, type);
     }
 
     @GetMapping("/sessions/{id}/export")
@@ -58,8 +59,8 @@ class ArchiveController {
     }
 
     @GetMapping("/tree")
-    List<ArchiveYear> tree() {
-        return archiveService.tree();
+    List<ArchiveYear> tree(@RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type) {
+        return archiveService.tree(type);
     }
 
     @GetMapping("/matches")
@@ -69,18 +70,20 @@ class ArchiveController {
         @RequestParam(name = "clubId", required = false) UUID clubId,
         @RequestParam(name = "playerId", required = false) UUID playerId,
         @RequestParam(name = "invalid", required = false) Boolean invalid,
+        @RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type,
         @RequestParam(name = "limit", defaultValue = "50") int limit,
         @RequestParam(name = "offset", defaultValue = "0") int offset
     ) {
-        return archiveService.briefs(year, month, clubId, playerId, invalid, limit, offset);
+        return archiveService.briefs(year, month, clubId, playerId, invalid, type, limit, offset);
     }
 
     @GetMapping("/invalid")
     MatchPage invalid(
+        @RequestParam(name = "type", required = false) ArchiveType type,
         @RequestParam(name = "limit", defaultValue = "50") int limit,
         @RequestParam(name = "offset", defaultValue = "0") int offset
     ) {
-        return archiveService.briefs(null, null, null, null, true, limit, offset);
+        return archiveService.briefs(null, null, null, null, true, type, limit, offset);
     }
 
     @GetMapping("/matches/{id}")
@@ -94,7 +97,7 @@ class ArchiveController {
     }
 
     @GetMapping("/stats")
-    ArchiveStats stats() {
-        return archiveService.stats();
+    ArchiveStats stats(@RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type) {
+        return archiveService.stats(type);
     }
 }

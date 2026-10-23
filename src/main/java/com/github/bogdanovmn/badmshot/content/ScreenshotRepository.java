@@ -1,5 +1,6 @@
 package com.github.bogdanovmn.badmshot.content;
 
+import com.github.bogdanovmn.badmshot.archive.ArchiveType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -243,7 +244,8 @@ public class ScreenshotRepository {
 
     public List<ScreenshotCard> teaserCards(UUID userId) {
         MapSqlParameterSource params = new MapSqlParameterSource()
-            .addValue("userId", userId);
+            .addValue("userId", userId)
+            .addValue("gamesType", ArchiveType.GAMES.name());
         StringBuilder sql = new StringBuilder(CARD_SELECT);
         sql.append("""
              WHERE s.id IN (
@@ -256,7 +258,7 @@ public class ScreenshotRepository {
                      FROM screenshot s2
                      JOIN match m2 ON m2.id = s2.match_id
                      JOIN archive_session sess2 ON sess2.id = m2.session_id
-                     WHERE sess2.club_id IS NOT NULL
+                     WHERE sess2.club_id IS NOT NULL AND m2.type = :gamesType
                  ) picked
                  WHERE picked.position = 1
              )
@@ -351,11 +353,14 @@ public class ScreenshotRepository {
     private void applyFilter(StringBuilder sql, MapSqlParameterSource params, ScreenshotFilter filter) {
         List<UUID> clubs = filter.clubsOrEmpty();
         List<UUID> players = filter.playersOrEmpty();
+        sql.append(" WHERE 1 = 1");
+        if (!filter.isIncludeIndi()) {
+            sql.append(" AND m.type = :gamesType");
+            params.addValue("gamesType", ArchiveType.GAMES.name());
+        }
         if (!clubs.isEmpty()) {
-            sql.append(" WHERE sess.club_id IN (:clubs)");
+            sql.append(" AND sess.club_id IN (:clubs)");
             params.addValue("clubs", clubs);
-        } else {
-            sql.append(" WHERE 1 = 1");
         }
         if (!players.isEmpty()) {
             sql.append("""

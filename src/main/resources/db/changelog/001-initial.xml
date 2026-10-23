@@ -184,4 +184,14 @@
         </sql>
     </changeSet>
 
+    <changeSet id="009-archive-types" author="badmshot">
+        <sql>
+            ALTER TABLE archive_session ADD COLUMN IF NOT EXISTS type varchar(10) NOT NULL DEFAULT 'GAMES';
+            ALTER TABLE match ADD COLUMN IF NOT EXISTS type varchar(10) NOT NULL DEFAULT 'GAMES';
+
+            CREATE INDEX IF NOT EXISTS archive_session_type_idx ON archive_session (type);
+            CREATE INDEX IF NOT EXISTS match_type_idx ON match (type);
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>

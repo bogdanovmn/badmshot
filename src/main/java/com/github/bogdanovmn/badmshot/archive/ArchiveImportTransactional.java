@@ -29,13 +29,17 @@ class ArchiveImportTransactional {
     void importSession(LoadedArchive archive, UUID jobId, JobContext context) {
         SessionManifest manifest = archive.getManifest();
         SessionManifestSession session = manifest.getSession();
+        ArchiveType type = session.getType() == null ? ArchiveType.GAMES : session.getType();
 
-        UUID clubId = clubRepository.upsert(session.getClub());
+        UUID clubId = type == ArchiveType.GAMES
+            ? clubRepository.upsert(session.getClub())
+            : null;
         UUID sessionId = sessionRepository.insert(
             session.getName(),
             session.getMatchDate(),
             clubId,
-            session.isTournament()
+            session.isTournament(),
+            type
         );
 
         int processed = 0;
@@ -50,7 +54,8 @@ class ArchiveImportTransactional {
                 sessionId,
                 match.getRelPath(),
                 match.getDurationSeconds(),
-                match.getSizeMbytes()
+                match.getSizeMbytes(),
+                type
             );
             List<UUID> playerIds = match.getPlayers().stream()
                 .map(playerRepository::upsert)

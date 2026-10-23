@@ -11,6 +11,7 @@ import java.util.UUID;
 @Builder
 class MatchBrief {
     UUID id;
+    ArchiveType type;
     String relPath;
     Integer year;
     Integer month;

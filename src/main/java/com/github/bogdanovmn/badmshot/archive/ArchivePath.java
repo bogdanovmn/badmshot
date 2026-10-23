@@ -9,6 +9,7 @@ import java.util.List;
 @Value
 @Builder
 class ArchivePath {
+    ArchiveType type;
     String relPath;
     String sessionName;
     Integer year;
@@ -21,5 +22,12 @@ class ArchivePath {
 
     public boolean valid() {
         return validationError == null;
+    }
+
+    public LocalDate sessionDate() {
+        if (type == ArchiveType.INDI && year != null && month != null) {
+            return LocalDate.of(year, month, 1);
+        }
+        return matchDate;
     }
 }

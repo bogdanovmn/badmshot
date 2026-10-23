@@ -26,7 +26,8 @@ class StatisticsRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public ArchiveStats stats() {
+    public ArchiveStats stats(ArchiveType type) {
+        Map<String, Object> typeParam = Map.of("type", type.name());
         List<ArchiveYearStat> years = jdbc.query("""
                 SELECT s.year, s.month,
                        count(*) AS matches,
@@ -34,11 +35,11 @@ class StatisticsRepository {
                        coalesce(sum(m.duration_seconds), 0) AS duration_seconds
                 FROM match m
                 JOIN archive_session s ON s.id = m.session_id
-                WHERE m.validation_error IS NULL AND s.year IS NOT NULL
+                WHERE m.validation_error IS NULL AND s.year IS NOT NULL AND m.type = :type
                 GROUP BY s.year, s.month
                 ORDER BY s.year DESC, s.month DESC
                 """,
-            Map.of(),
+            typeParam,
             (ResultSetExtractor<List<ArchiveYearStat>>) rs -> {
                 LinkedHashMap<Integer, List<ArchiveMonthStat>> byYear = new LinkedHashMap<>();
                 while (rs.next()) {
@@ -71,11 +72,11 @@ class StatisticsRepository {
                 FROM match m
                 JOIN archive_session s ON s.id = m.session_id
                 JOIN club c ON c.id = s.club_id
-                WHERE m.validation_error IS NULL
+                WHERE m.validation_error IS NULL AND m.type = :type
                 GROUP BY c.id, c.name, c.display_name
                 ORDER BY matches DESC, name
                 """,
-            Map.of(),
+            typeParam,
             CATALOG_STAT_ROW_MAPPER
         );
 
@@ -88,23 +89,25 @@ class StatisticsRepository {
                     FROM match_player mp
                     JOIN match m ON m.id = mp.match_id
                     JOIN player pp ON pp.id = mp.player_id
-                    WHERE m.validation_error IS NULL
+                    WHERE m.validation_error IS NULL AND m.type = :type
                 ) pm
                 JOIN player p ON p.id = pm.root_id
                 JOIN match m ON m.id = pm.match_id
                 GROUP BY p.id, p.name, p.display_name
                 ORDER BY matches DESC, name
                 """,
-            Map.of(),
+            typeParam,
             CATALOG_STAT_ROW_MAPPER
         );
 
         Map<String, Object> screenshots = jdbc.queryForObject("""
                 SELECT count(*) AS frames,
-                       coalesce(sum(octet_length(image)::bigint), 0) AS size_bytes
-                FROM screenshot
+                       coalesce(sum(octet_length(s.image)::bigint), 0) AS size_bytes
+                FROM screenshot s
+                JOIN match m ON m.id = s.match_id
+                WHERE m.type = :type
                 """,
-            Map.of(),
+            typeParam,
             (rs, rowNum) -> Map.<String, Object>of(
                 "frames", rs.getLong("frames"),
                 "sizeBytes", rs.getLong("size_bytes")

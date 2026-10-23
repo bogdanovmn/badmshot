@@ -69,12 +69,13 @@ class ScreenshotController {
     ScreenshotCard next(
         @CurrentUserId UUID userId,
         @RequestParam(name = "players", required = false) List<UUID> players,
-        @RequestParam(name = "clubs", required = false) List<UUID> clubs
+        @RequestParam(name = "clubs", required = false) List<UUID> clubs,
+        @RequestParam(name = "indi", defaultValue = "false") boolean includeIndi
     ) {
         if (!frameRateLimit.allow(userId)) {
-            throw new TooManyRequestsException("Слишком часто. Подождите несколько секунд.");
+            throw new TooManyRequestsException("Слишком часто. Подождите немного и попробуйте ещё раз.");
         }
-        return screenshotService.next(filter(players, clubs), userId);
+        return screenshotService.next(filter(players, clubs, includeIndi), userId);
     }
 
     @PostMapping("/{id}/view")
@@ -102,10 +103,11 @@ class ScreenshotController {
         screenshotService.unlike(id, userId);
     }
 
-    private ScreenshotFilter filter(List<UUID> players, List<UUID> clubs) {
+    private ScreenshotFilter filter(List<UUID> players, List<UUID> clubs, boolean includeIndi) {
         return ScreenshotFilter.builder()
             .players(players == null ? List.of() : players)
             .clubs(clubs == null ? List.of() : clubs)
+            .includeIndi(includeIndi)
             .build();
     }
 

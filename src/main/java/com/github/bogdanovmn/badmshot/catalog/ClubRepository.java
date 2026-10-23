@@ -1,5 +1,6 @@
 package com.github.bogdanovmn.badmshot.catalog;
 
+import com.github.bogdanovmn.badmshot.archive.ArchiveType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -95,15 +96,17 @@ public class ClubRepository {
         );
     }
 
-    public List<CatalogTag> tags() {
+    public List<CatalogTag> tags(ArchiveType type) {
         return jdbc.query("""
                 SELECT c.id, coalesce(nullif(c.display_name, ''), c.name) AS label, count(m.id) AS matches
                 FROM club c
                 JOIN archive_session s ON s.club_id = c.id
                 JOIN match m ON m.session_id = s.id
+                WHERE m.type = :type
                 GROUP BY c.id, c.name, c.display_name
                 ORDER BY label
                 """,
+            Map.of("type", type.name()),
             (rs, rowNum) -> CatalogTag.builder()
                 .id(UUID.fromString(rs.getString("id")))
                 .label(rs.getString("label"))
