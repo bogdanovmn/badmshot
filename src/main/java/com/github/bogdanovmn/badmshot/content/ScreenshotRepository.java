@@ -297,7 +297,9 @@ public class ScreenshotRepository {
         sql.append("""
 
             GROUP BY s.id, m.id, sess.id, c.id
-            ORDER BY likes DESC, s.created_at DESC
+            HAVING (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) > 0
+                OR s.views > 0
+            ORDER BY likes DESC, s.views DESC, s.created_at DESC
             LIMIT :limit
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
