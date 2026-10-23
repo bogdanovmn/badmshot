@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,7 +57,7 @@ class ArchiveImportService {
             Job job = jobService.start(
                 JobService.TYPE_IMPORT,
                 JobPhase.IMPORT,
-                params(options, file.getSize()),
+                params(options, file.getSize(), sessionName),
                 context -> importTask.run(context, options)
             );
             started = true;
@@ -74,13 +75,18 @@ class ArchiveImportService {
         return jobService.current(JobService.TYPE_IMPORT);
     }
 
+    List<Job> history(int limit) {
+        return jobService.history(JobService.TYPE_IMPORT, limit);
+    }
+
     void cancel() {
         jobService.cancel(JobService.TYPE_IMPORT);
     }
 
-    private Map<String, Object> params(ImportOptions options, long size) {
+    private Map<String, Object> params(ImportOptions options, long size, String sessionName) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("fileName", options.getOriginalName());
+        params.put("sessionName", sessionName);
         params.put("sizeBytes", size);
         params.put("tempFile", options.getArchiveFile().toString());
         return params;

@@ -17,6 +17,10 @@ public class Job {
     int totalFiles;
     int processedFiles;
     int screenshotsCreated;
+    long screenshotBytesTotal;
+    long screenshotBytesMax;
+    String fileName;
+    String sessionName;
     boolean cancelRequested;
     String error;
     Instant startedAt;

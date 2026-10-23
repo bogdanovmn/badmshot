@@ -26,7 +26,7 @@ public class ScreenshotProducer {
 
     private final ScreenshotRepository screenshotRepository;
 
-    public int produce(Path workDir, UUID matchId, Path videoFile, VideoMeta meta, ScreenshotOptions options) {
+    public ScreenshotProduction produce(Path workDir, UUID matchId, Path videoFile, VideoMeta meta, ScreenshotOptions options) {
         ScreenshotSize size = ScreenshotScale.of(meta, options.getScalePercent());
         ScreenshotCommand command = ScreenshotCommandFactory.builder()
             .playerPath(Path.of(options.getPlayerPath()))
@@ -41,6 +41,8 @@ public class ScreenshotProducer {
         int height = size.isOriginal() ? meta.getHeight() : size.getHeight();
 
         int created = 0;
+        long bytesTotal = 0;
+        long bytesMax = 0;
         for (int timecode : timecodes(meta, options)) {
             String outputName = UUID.randomUUID().toString();
             if (!command.execute(videoFile, timecode, outputName)) {
@@ -53,22 +55,29 @@ public class ScreenshotProducer {
                 continue;
             }
             try {
+                byte[] image = Files.readAllBytes(result);
                 screenshotRepository.insert(
                     matchId,
                     timecode,
-                    Files.readAllBytes(result),
+                    image,
                     options.getFormat().name(),
                     width,
                     height
                 );
                 created++;
+                bytesTotal += image.length;
+                bytesMax = Math.max(bytesMax, image.length);
             } catch (IOException e) {
                 log.warn("Can't read screenshot {}: {}", result, e.getMessage());
             } finally {
                 deleteQuietly(result);
             }
         }
-        return created;
+        return ScreenshotProduction.builder()
+            .created(created)
+            .bytesTotal(bytesTotal)
+            .bytesMax(bytesMax)
+            .build();
     }
 
     private List<Integer> timecodes(VideoMeta meta, ScreenshotOptions options) {

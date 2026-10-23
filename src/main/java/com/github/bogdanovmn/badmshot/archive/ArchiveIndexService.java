@@ -83,6 +83,18 @@ class ArchiveIndexService {
         return jobService.start(JobService.TYPE_INDEX, params(options), context -> task.run(context, options));
     }
 
+    IndexDefaults defaults() {
+        return IndexDefaults.builder()
+            .screenshotsCount(defaultCount)
+            .marginSeconds(defaultMarginSeconds)
+            .scalePercent(defaultScalePercent)
+            .quality(defaultQuality)
+            .threads(defaultThreads)
+            .player(defaultPlayer.toLowerCase(Locale.ROOT))
+            .format(defaultFormat.toLowerCase(Locale.ROOT))
+            .build();
+    }
+
     private void requireSupportedPlayerFormat(IndexOptions options) {
         if (options.getPlayer() == VideoPlayer.VLC && options.getFormat() != ScreenshotCommand.OutputFormat.jpeg
             && options.getFormat() != ScreenshotCommand.OutputFormat.png) {

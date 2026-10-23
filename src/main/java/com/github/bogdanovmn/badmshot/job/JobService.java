@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -62,6 +63,10 @@ public class JobService {
         return jobRepository.findById(jobId);
     }
 
+    public List<Job> history(String type, int limit) {
+        return jobRepository.findRecent(type, Math.max(1, Math.min(limit, 100)));
+    }
+
     public void cancel(String type) {
         Job job = jobRepository.findActive(type)
             .orElseThrow(() -> new NoSuchElementException("Активная задача не найдена"));
@@ -69,8 +74,20 @@ public class JobService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateProgressNow(UUID jobId, int processedFiles, int screenshotsCreated) {
-        jobRepository.updateProgress(jobId, processedFiles, screenshotsCreated);
+    public void updateProgressNow(
+        UUID jobId,
+        int processedFiles,
+        int screenshotsCreated,
+        long screenshotBytesTotal,
+        long screenshotBytesMax
+    ) {
+        jobRepository.updateProgress(
+            jobId,
+            processedFiles,
+            screenshotsCreated,
+            screenshotBytesTotal,
+            screenshotBytesMax
+        );
     }
 
     private void execute(UUID jobId, JobTask task, JobContext context) {
@@ -130,8 +147,19 @@ public class JobService {
         }
 
         @Override
-        public void processed(int processedFiles, int screenshotsCreated) {
-            jobRepository.updateProgress(jobId, processedFiles, screenshotsCreated);
+        public void processed(
+            int processedFiles,
+            int screenshotsCreated,
+            long screenshotBytesTotal,
+            long screenshotBytesMax
+        ) {
+            jobRepository.updateProgress(
+                jobId,
+                processedFiles,
+                screenshotsCreated,
+                screenshotBytesTotal,
+                screenshotBytesMax
+            );
         }
 
         @Override

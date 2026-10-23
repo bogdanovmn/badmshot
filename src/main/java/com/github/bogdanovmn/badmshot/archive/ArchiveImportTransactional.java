@@ -40,6 +40,8 @@ class ArchiveImportTransactional {
 
         int processed = 0;
         int screenshots = 0;
+        long screenshotBytesTotal = 0;
+        long screenshotBytesMax = 0;
         for (SessionManifestMatch match : manifest.getMatches()) {
             if (context.cancelled()) {
                 throw new JobCancelledException();
@@ -70,9 +72,17 @@ class ArchiveImportTransactional {
                     screenshot.getHeight()
                 );
                 screenshots++;
+                screenshotBytesTotal += image.length;
+                screenshotBytesMax = Math.max(screenshotBytesMax, image.length);
             }
             processed++;
-            jobService.updateProgressNow(jobId, processed, screenshots);
+            jobService.updateProgressNow(
+                jobId,
+                processed,
+                screenshots,
+                screenshotBytesTotal,
+                screenshotBytesMax
+            );
         }
     }
 }

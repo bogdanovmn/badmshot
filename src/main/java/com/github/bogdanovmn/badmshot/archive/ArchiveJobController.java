@@ -36,6 +36,11 @@ class ArchiveJobController {
             .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @GetMapping("/defaults")
+    IndexDefaults defaults() {
+        return indexService.defaults();
+    }
+
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void cancel() {

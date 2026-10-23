@@ -168,4 +168,20 @@
         </sql>
     </changeSet>
 
+    <changeSet id="007-job-screenshot-sizes" author="badmshot">
+        <sql>
+            ALTER TABLE job ADD COLUMN IF NOT EXISTS screenshot_bytes_total bigint NOT NULL DEFAULT 0;
+            ALTER TABLE job ADD COLUMN IF NOT EXISTS screenshot_bytes_max bigint NOT NULL DEFAULT 0;
+        </sql>
+    </changeSet>
+
+    <changeSet id="008-job-timestamps-with-timezone" author="badmshot">
+        <sql>
+            ALTER TABLE job
+                ALTER COLUMN started_at TYPE timestamptz USING started_at AT TIME ZONE current_setting('TIMEZONE'),
+                ALTER COLUMN last_activity_at TYPE timestamptz USING last_activity_at AT TIME ZONE current_setting('TIMEZONE'),
+                ALTER COLUMN finished_at TYPE timestamptz USING finished_at AT TIME ZONE current_setting('TIMEZONE');
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>

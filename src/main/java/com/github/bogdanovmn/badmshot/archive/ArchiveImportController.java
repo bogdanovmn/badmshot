@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/archive/import")
 @RequiredArgsConstructor
@@ -30,6 +32,13 @@ class ArchiveImportController {
         return importService.current()
             .map(job -> ResponseEntity.ok(JobResponse.of(job)))
             .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @GetMapping("/history")
+    List<JobResponse> history(@RequestParam(name = "limit", defaultValue = "20") int limit) {
+        return importService.history(limit).stream()
+            .map(JobResponse::of)
+            .toList();
     }
 
     @DeleteMapping

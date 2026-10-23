@@ -12,7 +12,12 @@ public interface JobContext {
 
     void totalFiles(int totalFiles);
 
-    void processed(int processedFiles, int screenshotsCreated);
+    void processed(
+        int processedFiles,
+        int screenshotsCreated,
+        long screenshotBytesTotal,
+        long screenshotBytesMax
+    );
 
     void heartbeat();
 }

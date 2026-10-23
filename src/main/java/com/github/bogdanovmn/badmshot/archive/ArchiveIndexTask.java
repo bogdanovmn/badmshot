@@ -4,6 +4,7 @@ import com.github.bogdanovmn.badmshot.catalog.ClubRepository;
 import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
 import com.github.bogdanovmn.badmshot.content.ScreenshotOptions;
 import com.github.bogdanovmn.badmshot.content.ScreenshotProducer;
+import com.github.bogdanovmn.badmshot.content.ScreenshotProduction;
 import com.github.bogdanovmn.badmshot.content.ScreenshotRepository;
 import com.github.bogdanovmn.badmshot.job.JobContext;
 import com.github.bogdanovmn.badmshot.job.JobPhase;
@@ -23,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,11 +53,13 @@ class ArchiveIndexTask {
         List<Path> files = scan(options.getArchiveDir());
         context.totalFiles(files.size());
 
+        int processed = 0;
         for (Path file : files) {
             if (context.cancelled()) {
                 return;
             }
             indexMeta(context, options.getArchiveDir(), file);
+            context.processed(++processed, 0, 0, 0);
         }
     }
 
@@ -110,10 +114,21 @@ class ArchiveIndexTask {
         Path workDir = createWorkDir();
         AtomicInteger processed = new AtomicInteger();
         AtomicInteger screenshots = new AtomicInteger();
+        AtomicLong screenshotBytesTotal = new AtomicLong();
+        AtomicLong screenshotBytesMax = new AtomicLong();
         ExecutorService workers = Executors.newFixedThreadPool(Math.max(1, options.getThreads()));
         try {
             for (Match match : matches) {
-                workers.submit(() -> processMatch(context, options, match, workDir, processed, screenshots));
+                workers.submit(() -> processMatch(
+                    context,
+                    options,
+                    match,
+                    workDir,
+                    processed,
+                    screenshots,
+                    screenshotBytesTotal,
+                    screenshotBytesMax
+                ));
             }
         } finally {
             workers.shutdown();
@@ -132,7 +147,9 @@ class ArchiveIndexTask {
         Match match,
         Path workDir,
         AtomicInteger processed,
-        AtomicInteger screenshots
+        AtomicInteger screenshots,
+        AtomicLong screenshotBytesTotal,
+        AtomicLong screenshotBytesMax
     ) {
         if (context.cancelled()) {
             return;
@@ -141,7 +158,7 @@ class ArchiveIndexTask {
         Optional<VideoMeta> probed = videoProbe.probe(video);
         if (probed.isEmpty()) {
             log.warn("Can't probe video: {}", video);
-            reportProcessed(context, processed, screenshots);
+            reportProcessed(context, processed, screenshots, screenshotBytesTotal, screenshotBytesMax);
             return;
         }
         VideoMeta meta = probed.get();
@@ -152,7 +169,7 @@ class ArchiveIndexTask {
 
         int existing = screenshotRepository.countByMatch(match.getId());
         if (existing >= options.getCount()) {
-            reportProcessed(context, processed, screenshots);
+            reportProcessed(context, processed, screenshots, screenshotBytesTotal, screenshotBytesMax);
             return;
         }
         if (existing > 0) {
@@ -168,13 +185,32 @@ class ArchiveIndexTask {
             .playerPath(options.getPlayerPath())
             .format(options.getFormat())
             .build();
-        int created = screenshotProducer.produce(workDir, match.getId(), video, meta, screenshotOptions);
-        screenshots.addAndGet(created);
-        reportProcessed(context, processed, screenshots);
+        ScreenshotProduction production = screenshotProducer.produce(
+            workDir,
+            match.getId(),
+            video,
+            meta,
+            screenshotOptions
+        );
+        screenshots.addAndGet(production.getCreated());
+        screenshotBytesTotal.addAndGet(production.getBytesTotal());
+        screenshotBytesMax.accumulateAndGet(production.getBytesMax(), Math::max);
+        reportProcessed(context, processed, screenshots, screenshotBytesTotal, screenshotBytesMax);
     }
 
-    private void reportProcessed(JobContext context, AtomicInteger processed, AtomicInteger screenshots) {
-        context.processed(processed.incrementAndGet(), screenshots.get());
+    private void reportProcessed(
+        JobContext context,
+        AtomicInteger processed,
+        AtomicInteger screenshots,
+        AtomicLong screenshotBytesTotal,
+        AtomicLong screenshotBytesMax
+    ) {
+        context.processed(
+            processed.incrementAndGet(),
+            screenshots.get(),
+            screenshotBytesTotal.get(),
+            screenshotBytesMax.get()
+        );
     }
 
     private List<Path> scan(Path archiveDir) {
