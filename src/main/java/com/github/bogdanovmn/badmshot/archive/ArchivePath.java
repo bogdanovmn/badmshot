@@ -17,6 +17,8 @@ class ArchivePath {
     LocalDate matchDate;
     String club;
     boolean tournament;
+    String group;
+    String comment;
     List<String> players;
     String validationError;
 

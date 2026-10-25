@@ -16,4 +16,5 @@ class ArchiveSessionFile {
     Integer durationSeconds;
     int screenshots;
     String validationError;
+    String comment;
 }

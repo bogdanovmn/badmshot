@@ -206,7 +206,7 @@ class ArchiveImportReader {
             && parsed.getType() == type;
         if (sameSession && type == ArchiveType.GAMES) {
             sameSession = session.getMatchDate().equals(parsed.getMatchDate())
-                && session.getClub().equals(parsed.getClub())
+                && clubMatches(session, parsed)
                 && session.isTournament() == parsed.isTournament();
         } else if (sameSession) {
             sameSession = session.getMatchDate().getYear() == parsed.getMatchDate().getYear()
@@ -218,6 +218,19 @@ class ArchiveImportReader {
         if (!match.getPlayers().equals(parsed.getPlayers())) {
             throw new IllegalArgumentException("Игроки не соответствуют имени файла: " + match.getRelPath());
         }
+    }
+
+    private boolean clubMatches(SessionManifestSession session, ArchivePath parsed) {
+        if (session.getClub() == null || parsed.getClub() == null) {
+            return false;
+        }
+        if (session.getClub().equals(parsed.getClub())) {
+            return session.getGroup() == null || session.getGroup().equals(parsed.getGroup());
+        }
+        // обратная совместимость: в старых манифестах метка группы входила в название клуба
+        return session.getGroup() == null
+            && parsed.getGroup() != null
+            && session.getClub().equals(parsed.getClub() + "-" + parsed.getGroup());
     }
 
     private byte[] read(ZipFile zip, ZipEntry entry, long limit) {

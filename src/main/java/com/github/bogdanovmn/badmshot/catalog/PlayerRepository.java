@@ -98,6 +98,7 @@ public class PlayerRepository {
         }
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
                   AND p.id IN (
                     SELECT coalesce(pp.alias_of_player_id, pp.id)
                     FROM player pp
@@ -115,6 +116,7 @@ public class PlayerRepository {
         String searchTerm = FullTextQuery.normalized(term);
         StringBuilder sql = new StringBuilder(PLAYER_SELECT).append("""
                 WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("term", searchTerm)
@@ -201,6 +203,7 @@ public class PlayerRepository {
                     WHERE m.type = :type
                 ) t
                 JOIN player p ON p.id = t.root_id
+                WHERE lower(p.name) <> 'skip'
                 GROUP BY p.id, p.name, p.display_name
                 ORDER BY label
                 """,

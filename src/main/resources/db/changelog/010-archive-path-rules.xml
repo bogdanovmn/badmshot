@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="010-archive-path-rules" author="badmshot">
+        <sql>
+            ALTER TABLE archive_session ADD COLUMN IF NOT EXISTS group_label varchar(3);
+            ALTER TABLE match ADD COLUMN IF NOT EXISTS comment varchar(500);
+            ALTER TABLE match_player ALTER COLUMN player_id DROP NOT NULL;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

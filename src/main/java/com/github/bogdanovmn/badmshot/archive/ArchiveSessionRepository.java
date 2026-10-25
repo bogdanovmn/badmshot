@@ -34,22 +34,29 @@ class ArchiveSessionRepository {
         .club(rs.getString("club"))
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
+        .group(rs.getString("group_label"))
         .matches(rs.getInt("matches"))
         .sizeMbytes(rs.getLong("size_mbytes"))
         .durationSeconds(rs.getLong("duration_seconds"))
         .invalid(rs.getInt("invalid"))
+        .comment(rs.getString("comment"))
         .exportable(rs.getBoolean("exportable"))
         .files(List.of())
         .build();
 
     private static final String SESSION_SELECT = """
         SELECT s.id, s.type, s.name, s.match_date, s.year, s.month, s.club_id, s.tournament,
+               s.group_label,
                c.name AS club,
                coalesce(c.display_name, c.name) AS club_name,
                count(m.id) AS matches,
                coalesce(sum(m.size_mbytes), 0) AS size_mbytes,
                coalesce(sum(m.duration_seconds), 0) AS duration_seconds,
                count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid,
+               CASE
+                   WHEN count(m.comment) = count(m.id) AND count(DISTINCT m.comment) = 1
+                   THEN min(m.comment)
+               END AS comment,
                count(m.id) > 0
                    AND bool_and(m.validation_error IS NULL)
                    AND bool_and(EXISTS (
@@ -91,14 +98,15 @@ class ArchiveSessionRepository {
         ) > 0;
     }
 
-    UUID upsert(String name, LocalDate matchDate, UUID clubId, boolean tournament, ArchiveType type) {
+    UUID upsert(String name, LocalDate matchDate, UUID clubId, boolean tournament, String group, ArchiveType type) {
         return jdbc.queryForObject("""
-                INSERT INTO archive_session (name, match_date, club_id, tournament, type)
-                VALUES (:name, :matchDate, :clubId, :tournament, :type)
+                INSERT INTO archive_session (name, match_date, club_id, tournament, group_label, type)
+                VALUES (:name, :matchDate, :clubId, :tournament, :group, :type)
                 ON CONFLICT (name) DO UPDATE SET
                     match_date = coalesce(EXCLUDED.match_date, archive_session.match_date),
                     club_id = coalesce(EXCLUDED.club_id, archive_session.club_id),
                     tournament = archive_session.tournament OR EXCLUDED.tournament,
+                    group_label = coalesce(EXCLUDED.group_label, archive_session.group_label),
                     type = EXCLUDED.type,
                     indexed_at = now()
                 RETURNING id
@@ -108,15 +116,16 @@ class ArchiveSessionRepository {
                 .addValue("matchDate", matchDate)
                 .addValue("clubId", clubId)
                 .addValue("tournament", tournament)
+                .addValue("group", group)
                 .addValue("type", type.name()),
             UUID.class
         );
     }
 
-    UUID insert(String name, LocalDate matchDate, UUID clubId, boolean tournament, ArchiveType type) {
+    UUID insert(String name, LocalDate matchDate, UUID clubId, boolean tournament, String group, ArchiveType type) {
         return jdbc.queryForObject("""
-                INSERT INTO archive_session (name, match_date, club_id, tournament, type)
-                VALUES (:name, :matchDate, :clubId, :tournament, :type)
+                INSERT INTO archive_session (name, match_date, club_id, tournament, group_label, type)
+                VALUES (:name, :matchDate, :clubId, :tournament, :group, :type)
                 RETURNING id
                 """,
             new MapSqlParameterSource()
@@ -124,6 +133,7 @@ class ArchiveSessionRepository {
                 .addValue("matchDate", matchDate)
                 .addValue("clubId", clubId)
                 .addValue("tournament", tournament)
+                .addValue("group", group)
                 .addValue("type", type.name()),
             UUID.class
         );
@@ -196,7 +206,7 @@ class ArchiveSessionRepository {
     private Map<UUID, List<ArchiveSessionFile>> files(List<UUID> sessionIds) {
         return jdbc.query("""
                 SELECT m.session_id, m.id, m.rel_path, m.size_mbytes, m.duration_seconds,
-                       m.validation_error,
+                       m.validation_error, m.comment,
                        (SELECT count(*) FROM screenshot sh WHERE sh.match_id = m.id) AS screenshots,
                        array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
                            FILTER (WHERE root_player.id IS NOT NULL) AS players
@@ -222,6 +232,7 @@ class ArchiveSessionRepository {
                             .durationSeconds((Integer) rs.getObject("duration_seconds"))
                             .screenshots(rs.getInt("screenshots"))
                             .validationError(rs.getString("validation_error"))
+                            .comment(rs.getString("comment"))
                             .build()
                     );
                 }

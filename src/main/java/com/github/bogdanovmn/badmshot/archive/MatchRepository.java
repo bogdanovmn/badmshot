@@ -33,6 +33,8 @@ class MatchRepository {
         .clubId(rs.getString("club_id") == null ? null : UUID.fromString(rs.getString("club_id")))
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
+        .group(rs.getString("group_label"))
+        .comment(rs.getString("comment"))
         .durationSeconds((Integer) rs.getObject("duration_seconds"))
         .sizeMbytes(rs.getInt("size_mbytes"))
         .validationError(rs.getString("validation_error"))
@@ -49,6 +51,8 @@ class MatchRepository {
         .clubId(rs.getString("club_id") == null ? null : UUID.fromString(rs.getString("club_id")))
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
+        .group(rs.getString("group_label"))
+        .comment(rs.getString("comment"))
         .durationSeconds((Integer) rs.getObject("duration_seconds"))
         .sizeMbytes(rs.getInt("size_mbytes"))
         .validationError(rs.getString("validation_error"))
@@ -57,6 +61,7 @@ class MatchRepository {
 
     private static final String MATCH_SELECT = """
         SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+               s.group_label, m.comment,
                m.duration_seconds, m.size_mbytes, m.validation_error, m.indexed_at,
                coalesce(c.display_name, c.name) AS club_name
         FROM match m
@@ -66,6 +71,7 @@ class MatchRepository {
 
     private static final String BRIEF_SELECT = """
         SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+               s.group_label, m.comment,
                m.duration_seconds, m.size_mbytes, m.validation_error,
                coalesce(c.display_name, c.name) AS club_name,
                array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
@@ -85,15 +91,17 @@ class MatchRepository {
         UUID sessionId,
         int sizeMbytes,
         String validationError,
+        String comment,
         ArchiveType type
     ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error, type)
-                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError, :type)
+                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error, comment, type)
+                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError, :comment, :type)
                 ON CONFLICT (rel_path) DO UPDATE SET
                     session_id = EXCLUDED.session_id,
                     size_mbytes = EXCLUDED.size_mbytes,
                     validation_error = EXCLUDED.validation_error,
+                    comment = EXCLUDED.comment,
                     type = EXCLUDED.type,
                     indexed_at = now()
                 RETURNING id
@@ -103,6 +111,7 @@ class MatchRepository {
                 .addValue("sessionId", sessionId)
                 .addValue("sizeMbytes", sizeMbytes)
                 .addValue("validationError", validationError)
+                .addValue("comment", comment)
                 .addValue("type", type.name()),
             UUID.class
         );
@@ -113,11 +122,12 @@ class MatchRepository {
         String relPath,
         Integer durationSeconds,
         int sizeMbytes,
+        String comment,
         ArchiveType type
     ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes, type)
-                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes, :type)
+                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes, comment, type)
+                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes, :comment, :type)
                 RETURNING id
                 """,
             new MapSqlParameterSource()
@@ -125,6 +135,7 @@ class MatchRepository {
                 .addValue("relPath", relPath)
                 .addValue("durationSeconds", durationSeconds)
                 .addValue("sizeMbytes", sizeMbytes)
+                .addValue("comment", comment)
                 .addValue("type", type.name()),
             UUID.class
         );
@@ -141,11 +152,10 @@ class MatchRepository {
                     INSERT INTO match_player (match_id, player_id, position)
                     VALUES (:matchId, :playerId, :position)
                     """,
-                Map.of(
-                    "matchId", matchId,
-                    "playerId", playerIds.get(position),
-                    "position", position
-                )
+                new MapSqlParameterSource()
+                    .addValue("matchId", matchId)
+                    .addValue("playerId", playerIds.get(position))
+                    .addValue("position", position)
             );
         }
     }

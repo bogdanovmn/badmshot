@@ -39,6 +39,7 @@ class ArchiveImportTransactional {
             session.getMatchDate(),
             clubId,
             session.isTournament(),
+            session.getGroup(),
             type
         );
 
@@ -55,10 +56,11 @@ class ArchiveImportTransactional {
                 match.getRelPath(),
                 match.getDurationSeconds(),
                 match.getSizeMbytes(),
+                match.getComment(),
                 type
             );
             List<UUID> playerIds = match.getPlayers().stream()
-                .map(playerRepository::upsert)
+                .map(name -> ArchivePathParser.isSkip(name) ? null : playerRepository.upsert(name))
                 .toList();
             matchRepository.replacePlayers(matchId, playerIds);
 

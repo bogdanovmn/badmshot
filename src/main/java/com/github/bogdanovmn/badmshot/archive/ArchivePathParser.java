@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,11 +13,23 @@ import java.util.regex.Pattern;
 class ArchivePathParser {
 
     static final String DEFAULT_INDI_PLAYER = "misha";
+    /**
+     * Заглушка вместо неизвестного имени игрока. Позиция игрока сохраняется,
+     * но сам игрок не попадает в справочник и не показывается пользователю.
+     */
+    static final String SKIP_PLAYER = "skip";
+
+    private static final String COMMENT_SEPARATOR = "--";
 
     private static final Pattern YEAR = Pattern.compile("(\\d{4})");
     private static final Pattern MONTH_DIR = Pattern.compile("(\\d{4})-(\\d{2})");
     private static final Pattern DATE_DIR = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})-(t-)?(.+)");
+    private static final Pattern GROUP_SUFFIX = Pattern.compile("(.+)-([A-Za-z0-9]{2,3})");
     private static final Pattern INDI_FILE = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})-indi(?:--(.+))?");
+
+    public static boolean isSkip(String name) {
+        return name != null && SKIP_PLAYER.equalsIgnoreCase(name);
+    }
 
     public ArchivePath parse(String relPath) {
         String normalized = relPath.replace('\\', '/');
@@ -47,6 +60,7 @@ class ArchivePathParser {
 
         LocalDate matchDate = null;
         String club = null;
+        String group = null;
         boolean tournament = false;
         String dateDir = parts[3];
         Matcher dateMatcher = DATE_DIR.matcher(dateDir);
@@ -56,6 +70,13 @@ class ArchivePathParser {
             int dirDay = Integer.parseInt(dateMatcher.group(3));
             tournament = dateMatcher.group(4) != null;
             club = dateMatcher.group(5);
+            if (tournament) {
+                Matcher groupMatcher = GROUP_SUFFIX.matcher(club);
+                if (groupMatcher.matches()) {
+                    club = groupMatcher.group(1);
+                    group = groupMatcher.group(2).toUpperCase(Locale.ROOT);
+                }
+            }
             validateDateParts(dirYear, dirMonth, dirDay, year, month, dateDir, errors);
             try {
                 matchDate = LocalDate.of(dirYear, dirMonth, dirDay);
@@ -66,7 +87,7 @@ class ArchivePathParser {
             errors.add("Некорректное имя папки даты: " + dateDir);
         }
 
-        List<String> players = parseGamePlayers(parts[4], dateDir, errors);
+        PlayersAndComment parsedFile = parseGameFileName(parts[4], dateDir, errors);
 
         return ArchivePath.builder()
             .type(ArchiveType.GAMES)
@@ -77,7 +98,9 @@ class ArchivePathParser {
             .matchDate(matchDate)
             .club(club)
             .tournament(tournament)
-            .players(players)
+            .group(group)
+            .comment(parsedFile.comment())
+            .players(parsedFile.players())
             .validationError(errors.isEmpty() ? null : String.join("; ", errors))
             .build();
     }
@@ -93,6 +116,7 @@ class ArchivePathParser {
         Integer month = parseMonthDir(parts[2], year, errors);
 
         LocalDate matchDate = null;
+        String comment = null;
         List<String> players = List.of();
         String base = stripExtension(parts[3], errors);
         if (base != null) {
@@ -107,7 +131,19 @@ class ArchivePathParser {
                 } catch (Exception e) {
                     errors.add("Некорректная дата: " + parts[3]);
                 }
-                players = parseIndiPlayers(fileMatcher.group(4), parts[3], errors);
+                String playersAndComment = fileMatcher.group(4);
+                int commentMarker = playersAndComment == null
+                    ? -1
+                    : playersAndComment.indexOf(COMMENT_SEPARATOR);
+                if (commentMarker >= 0) {
+                    comment = playersAndComment.substring(commentMarker + COMMENT_SEPARATOR.length()).trim();
+                    playersAndComment = playersAndComment.substring(0, commentMarker);
+                    if (comment.isEmpty()) {
+                        errors.add("Пустой комментарий в имени файла: " + parts[3]);
+                        comment = null;
+                    }
+                }
+                players = parseIndiPlayers(playersAndComment, parts[3], errors);
             } else {
                 errors.add("Имя файла не соответствует формату индивидуальной тренировки: " + parts[3]);
             }
@@ -122,6 +158,8 @@ class ArchivePathParser {
             .matchDate(matchDate)
             .club(null)
             .tournament(false)
+            .group(null)
+            .comment(comment)
             .players(players)
             .validationError(errors.isEmpty() ? null : String.join("; ", errors))
             .build();
@@ -192,36 +230,47 @@ class ArchivePathParser {
         return fileName.substring(0, dot);
     }
 
-    private List<String> parseGamePlayers(String fileName, String dateDir, List<String> errors) {
+    private PlayersAndComment parseGameFileName(String fileName, String dateDir, List<String> errors) {
         String base = stripExtension(fileName, errors);
         if (base == null) {
-            return List.of();
+            return new PlayersAndComment(List.of(), null);
         }
 
         String prefix = dateDir + "--";
         if (!base.startsWith(prefix)) {
             errors.add("Имя файла не соответствует папке: " + fileName);
-            return List.of();
+            return new PlayersAndComment(List.of(), null);
         }
 
-        String playersPart = base.substring(prefix.length());
-        if (playersPart.isBlank()) {
+        String playersAndComment = base.substring(prefix.length());
+        String comment = null;
+        int commentMarker = playersAndComment.indexOf(COMMENT_SEPARATOR);
+        if (commentMarker >= 0) {
+            comment = playersAndComment.substring(commentMarker + COMMENT_SEPARATOR.length()).trim();
+            playersAndComment = playersAndComment.substring(0, commentMarker);
+            if (comment.isEmpty()) {
+                errors.add("Пустой комментарий в имени файла: " + fileName);
+                comment = null;
+            }
+        }
+
+        if (playersAndComment.isBlank()) {
             errors.add("Не указаны игроки в имени файла: " + fileName);
-            return List.of();
+            return new PlayersAndComment(List.of(), comment);
         }
 
         List<String> players = new ArrayList<>();
-        for (String name : playersPart.split("-")) {
+        for (String name : playersAndComment.split("-")) {
             if (name.isBlank()) {
                 errors.add("Пустое имя игрока в: " + fileName);
                 continue;
             }
-            players.add(name);
+            players.add(isSkip(name) ? SKIP_PLAYER : name);
         }
         if (players.size() != 2 && players.size() != 4) {
             errors.add("Ожидается 2 или 4 игрока, получено: " + players.size());
         }
-        return players;
+        return new PlayersAndComment(players, comment);
     }
 
     private List<String> parseIndiPlayers(String playersPart, String fileName, List<String> errors) {
@@ -240,5 +289,8 @@ class ArchivePathParser {
             errors.add("Ожидается ровно 2 игрока, получено: " + players.size());
         }
         return players;
+    }
+
+    private record PlayersAndComment(List<String> players, String comment) {
     }
 }

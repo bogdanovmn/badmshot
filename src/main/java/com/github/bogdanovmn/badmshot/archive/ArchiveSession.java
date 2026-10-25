@@ -20,10 +20,12 @@ class ArchiveSession {
     String club;
     String clubName;
     boolean tournament;
+    String group;
     int matches;
     long sizeMbytes;
     long durationSeconds;
     int invalid;
+    String comment;
     boolean exportable;
     List<ArchiveSessionFile> files;
 }

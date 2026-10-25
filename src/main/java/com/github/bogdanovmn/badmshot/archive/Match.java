@@ -19,6 +19,8 @@ class Match {
     UUID clubId;
     String clubName;
     boolean tournament;
+    String group;
+    String comment;
     Integer durationSeconds;
     int sizeMbytes;
     String validationError;
