@@ -59,8 +59,11 @@ class ArchiveController {
     }
 
     @GetMapping("/tree")
-    List<ArchiveYear> tree(@RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type) {
-        return archiveService.tree(type);
+    List<ArchiveYear> tree(
+        @RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type,
+        @RequestParam(name = "playerId", required = false) UUID playerId
+    ) {
+        return archiveService.tree(type, playerId);
     }
 
     @GetMapping("/matches")

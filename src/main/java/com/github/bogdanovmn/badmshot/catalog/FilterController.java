@@ -32,9 +32,18 @@ class FilterController {
     @GetMapping("/players")
     List<Player> players(
         @RequestParam(name = "clubId", required = false) UUID clubId,
-        @RequestParam(name = "term", required = false) String term
+        @RequestParam(name = "term", required = false) String term,
+        @RequestParam(name = "letter", required = false) String letter
     ) {
+        if (letter != null && !letter.isBlank()) {
+            return playerRepository.byLetter(letter);
+        }
         return playerRepository.search(term, clubId, limit);
+    }
+
+    @GetMapping("/players/letters")
+    List<String> playerLetters() {
+        return playerRepository.letters();
     }
 
     @GetMapping("/clubs/by-ids")

@@ -35,8 +35,11 @@ class ArchiveService {
     private boolean readOnly;
 
     @Transactional(readOnly = true)
-    List<ArchiveYear> tree(ArchiveType type) {
-        return matchRepository.tree(type);
+    List<ArchiveYear> tree(ArchiveType type, UUID playerId) {
+        UUID canonicalPlayerId = playerId == null
+            ? null
+            : playerRepository.canonicalId(playerId).orElse(playerId);
+        return matchRepository.tree(type, canonicalPlayerId);
     }
 
     @Transactional(readOnly = true)

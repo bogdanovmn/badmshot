@@ -51,4 +51,22 @@ class FrameRateLimit {
         });
         return allowed[0];
     }
+
+    FrameRateLimitStatus status(UUID userId) {
+        Deque<Instant> frames = userId == null ? null : servedFrames.getIfPresent(userId);
+        int usedFrames = frames == null ? 0 : frames.size();
+        int freeFramesLeft = Math.max(0, freeFrames - usedFrames);
+        int retryAfterSeconds = 0;
+        if (freeFramesLeft == 0 && frames != null && !frames.isEmpty()) {
+            Instant last = frames.peekLast();
+            long millis = Duration.between(Instant.now(), last.plusSeconds(minSecondsBetweenFrames)).toMillis();
+            retryAfterSeconds = (int) Math.max(0, (millis + 999) / 1000);
+        }
+        return new FrameRateLimitStatus(
+            minSecondsBetweenFrames,
+            freeFrames,
+            freeFramesLeft,
+            retryAfterSeconds
+        );
+    }
 }

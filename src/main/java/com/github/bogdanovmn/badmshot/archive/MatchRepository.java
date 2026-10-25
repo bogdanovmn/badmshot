@@ -328,18 +328,36 @@ class MatchRepository {
         return jdbc.queryForObject(sql.toString(), params, Integer.class);
     }
 
-    public List<ArchiveYear> tree(ArchiveType type) {
-        return jdbc.query("""
+    public List<ArchiveYear> tree(ArchiveType type, UUID playerId) {
+        String matchedExpression = playerId == null
+            ? "0"
+            : """
+                count(*) FILTER (WHERE EXISTS (
+                    SELECT 1
+                    FROM match_player mp
+                    JOIN player p ON p.id = mp.player_id
+                    WHERE mp.match_id = m.id
+                      AND coalesce(p.alias_of_player_id, p.id) = :playerId
+                ))
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("type", type.name());
+        if (playerId != null) {
+            params.addValue("playerId", playerId);
+        }
+        return jdbc.query(
+            """
                 SELECT s.year, s.month,
                        count(m.id) AS matches,
-                       count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid
+                       count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid,
+                       %s AS matched
                 FROM archive_session s
                 JOIN match m ON m.session_id = s.id
                 WHERE s.year IS NOT NULL AND s.type = :type
                 GROUP BY s.year, s.month
                 ORDER BY s.year DESC, s.month DESC
-                """,
-            Map.of("type", type.name()),
+                """.formatted(matchedExpression),
+            params,
             (ResultSetExtractor<List<ArchiveYear>>) rs -> {
                 LinkedHashMap<Integer, List<ArchiveMonth>> byYear = new LinkedHashMap<>();
                 while (rs.next()) {
@@ -349,6 +367,7 @@ class MatchRepository {
                             .month(rs.getInt("month"))
                             .matches(rs.getInt("matches"))
                             .invalid(rs.getInt("invalid"))
+                            .matched(rs.getInt("matched"))
                             .build()
                     );
                 }
@@ -357,6 +376,7 @@ class MatchRepository {
                         .year(entry.getKey())
                         .matches(entry.getValue().stream().mapToInt(ArchiveMonth::getMatches).sum())
                         .invalid(entry.getValue().stream().mapToInt(ArchiveMonth::getInvalid).sum())
+                        .matched(entry.getValue().stream().mapToInt(ArchiveMonth::getMatched).sum())
                         .months(entry.getValue())
                         .build()
                     )

@@ -64,6 +64,12 @@ class ScreenshotController {
             .body(resized.getData());
     }
 
+    @GetMapping("/rate-limit")
+    @PreAuthorize("isAuthenticated()")
+    FrameRateLimitStatus rateLimit(@CurrentUserId UUID userId) {
+        return frameRateLimit.status(userId);
+    }
+
     @GetMapping("/next")
     @PreAuthorize("isAuthenticated()")
     ScreenshotCard next(

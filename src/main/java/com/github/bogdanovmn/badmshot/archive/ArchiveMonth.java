@@ -11,4 +11,5 @@ class ArchiveMonth {
     int month;
     int matches;
     int invalid;
+    int matched;
 }

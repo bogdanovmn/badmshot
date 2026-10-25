@@ -179,6 +179,31 @@ public class PlayerRepository {
         return 0.85;
     }
 
+    public List<Player> byLetter(String letter) {
+        return jdbc.query(PLAYER_SELECT + """
+                WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
+                  AND upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) = upper(:letter)
+                ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
+                """,
+            Map.of("letter", letter),
+            PLAYER_ROW_MAPPER
+        );
+    }
+
+    public List<String> letters() {
+        return jdbc.queryForList("""
+                SELECT DISTINCT upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) AS letter
+                FROM player p
+                WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
+                ORDER BY letter
+                """,
+            Map.of(),
+            String.class
+        );
+    }
+
     public List<Player> byMatch(UUID matchId) {
         return jdbc.query(PLAYER_SELECT + """
                 JOIN match_player mp ON mp.player_id = p.id
