@@ -26,6 +26,7 @@ class ScreenshotCard {
     boolean tournament;
     List<String> players;
     long likes;
+    long shares;
     long comments;
     Instant lastCommentAt;
     boolean liked;

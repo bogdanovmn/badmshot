@@ -230,6 +230,7 @@ public class PlayerRepository {
                 JOIN player p ON p.id = t.root_id
                 WHERE lower(p.name) <> 'skip'
                 GROUP BY p.id, p.name, p.display_name
+                HAVING count(*) > 2
                 ORDER BY label
                 """,
             Map.of("type", type.name()),

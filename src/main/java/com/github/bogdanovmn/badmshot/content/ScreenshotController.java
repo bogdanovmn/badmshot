@@ -69,6 +69,12 @@ class ScreenshotController {
         return shareService.myShares(userId, screenshotService.profileLimit());
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    ScreenshotCard card(@PathVariable("id") UUID id, @CurrentUserId UUID userId) {
+        return screenshotService.card(id, userId);
+    }
+
     @PostMapping("/{id}/share")
     @PreAuthorize("isAuthenticated()")
     @ResponseStatus(HttpStatus.CREATED)

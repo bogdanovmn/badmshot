@@ -12,6 +12,7 @@ import java.util.UUID;
 @Builder
 class PublicSharedFrame {
     UUID token;
+    UUID screenshotId;
     int timecodeSeconds;
     String imageFormat;
     int width;
@@ -24,7 +25,9 @@ class PublicSharedFrame {
     boolean tournament;
     List<String> players;
     long likes;
+    long shares;
     long comments;
+    boolean liked;
     long views;
     long shareViews;
 
@@ -32,6 +35,7 @@ class PublicSharedFrame {
         ScreenshotCard card = shared.getCard();
         return PublicSharedFrame.builder()
             .token(shared.getToken())
+            .screenshotId(card.getId())
             .timecodeSeconds(card.getTimecodeSeconds())
             .imageFormat(card.getImageFormat())
             .width(card.getWidth())
@@ -44,7 +48,9 @@ class PublicSharedFrame {
             .tournament(card.isTournament())
             .players(card.getPlayers())
             .likes(card.getLikes())
+            .shares(card.getShares())
             .comments(card.getComments())
+            .liked(card.isLiked())
             .views(card.getViews())
             .shareViews(shared.getViews())
             .build();

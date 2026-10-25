@@ -26,8 +26,11 @@ class ScreenshotShareController {
     private final ImageResizer imageResizer;
 
     @GetMapping("/{token}")
-    PublicSharedFrame frame(@PathVariable("token") UUID token) {
-        return shareService.publicFrame(token);
+    PublicSharedFrame frame(
+        @PathVariable("token") UUID token,
+        @CurrentUserId UUID userId
+    ) {
+        return shareService.publicFrame(token, userId);
     }
 
     @GetMapping("/{token}/crop/{width}")

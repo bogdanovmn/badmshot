@@ -104,6 +104,12 @@ class ScreenshotService {
     }
 
     @Transactional(readOnly = true)
+    ScreenshotCard card(UUID id, UUID userId) {
+        return screenshotRepository.card(id, userIdOrAnonymous(userId))
+            .orElseThrow(() -> new NoSuchElementException("Кадр не найден: " + id));
+    }
+
+    @Transactional(readOnly = true)
     ScreenshotImage image(UUID id) {
         return screenshotRepository.image(id)
             .orElseThrow(() -> new NoSuchElementException("Кадр не найден: " + id));

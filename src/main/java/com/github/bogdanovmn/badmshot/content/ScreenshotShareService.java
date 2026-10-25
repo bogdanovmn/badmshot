@@ -43,9 +43,9 @@ class ScreenshotShareService {
     }
 
     @Transactional(readOnly = true)
-    PublicSharedFrame publicFrame(UUID token) {
+    PublicSharedFrame publicFrame(UUID token, UUID userId) {
         return PublicSharedFrame.from(
-            screenshotRepository.sharedFrame(token, ANONYMOUS_USER)
+            screenshotRepository.sharedFrame(token, userIdOrAnonymous(userId))
                 .orElseThrow(() -> new NoSuchElementException("Ссылка не найдена"))
         );
     }
@@ -63,6 +63,10 @@ class ScreenshotShareService {
             throw new NoSuchElementException("Ссылка не найдена");
         }
         shareRepository.registerView(token, visitorKey(userId, clientAddress), viewCooldownSeconds);
+    }
+
+    private UUID userIdOrAnonymous(UUID userId) {
+        return userId == null ? ANONYMOUS_USER : userId;
     }
 
     private String visitorKey(UUID userId, String clientAddress) {

@@ -49,6 +49,7 @@ public class ScreenshotRepository {
         .tournament(rs.getBoolean("tournament"))
         .players(playerNames(rs))
         .likes(rs.getLong("likes"))
+        .shares(rs.getLong("shares"))
         .comments(rs.getLong("comments"))
         .lastCommentAt(rs.getTimestamp("last_comment_at") == null
             ? null
@@ -72,6 +73,7 @@ public class ScreenshotRepository {
                sess.year, sess.month, sess.match_date, sess.tournament, sess.club_id,
                coalesce(c.display_name, c.name) AS club_name,
                (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) AS likes,
+               (SELECT count(*) FROM screenshot_share sh WHERE sh.screenshot_id = s.id) AS shares,
                (SELECT count(*) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) AS comments,
                (SELECT max(sc.created_at) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) AS last_comment_at,
                EXISTS (
@@ -319,9 +321,10 @@ public class ScreenshotRepository {
 
             GROUP BY s.id, m.id, sess.id, c.id
             HAVING (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) > 0
+                OR (SELECT count(*) FROM screenshot_share sh WHERE sh.screenshot_id = s.id) > 0
                 OR (SELECT count(*) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) > 0
                 OR s.views > 0
-            ORDER BY likes DESC, comments DESC, s.views DESC, s.created_at DESC
+            ORDER BY likes DESC, shares DESC, comments DESC, s.views DESC, s.created_at DESC
             LIMIT :limit
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
