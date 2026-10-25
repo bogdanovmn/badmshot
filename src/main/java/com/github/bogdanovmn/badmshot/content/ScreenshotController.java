@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.content;
 
 import com.github.bogdanovmn.badmshot.infrastructure.security.CurrentUserId;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -26,6 +28,8 @@ import java.util.UUID;
 class ScreenshotController {
 
     private final ScreenshotService screenshotService;
+    private final ScreenshotCommentService commentService;
+    private final ScreenshotShareService shareService;
     private final FrameTeaserService frameTeaserService;
     private final FrameRateLimit frameRateLimit;
     private final ImageResizer imageResizer;
@@ -45,6 +49,50 @@ class ScreenshotController {
     @PreAuthorize("isAuthenticated()")
     List<ScreenshotCard> top(@CurrentUserId UUID userId) {
         return screenshotService.top(userId);
+    }
+
+    @GetMapping("/commented")
+    @PreAuthorize("isAuthenticated()")
+    List<ScreenshotCard> commented(@CurrentUserId UUID userId) {
+        return screenshotService.commented(userId);
+    }
+
+    @GetMapping("/mine/comments")
+    @PreAuthorize("isAuthenticated()")
+    List<ScreenshotCard> myComments(@CurrentUserId UUID userId) {
+        return screenshotService.myCommented(userId);
+    }
+
+    @GetMapping("/mine/shares")
+    @PreAuthorize("isAuthenticated()")
+    List<SharedFrame> myShares(@CurrentUserId UUID userId) {
+        return shareService.myShares(userId, screenshotService.profileLimit());
+    }
+
+    @PostMapping("/{id}/share")
+    @PreAuthorize("isAuthenticated()")
+    @ResponseStatus(HttpStatus.CREATED)
+    ScreenshotShareToken share(@PathVariable("id") UUID id, @CurrentUserId UUID userId) {
+        return ScreenshotShareToken.builder()
+            .token(shareService.create(id, userId))
+            .build();
+    }
+
+    @GetMapping("/{id}/comments")
+    @PreAuthorize("isAuthenticated()")
+    List<ScreenshotComment> comments(@PathVariable("id") UUID id) {
+        return commentService.list(id);
+    }
+
+    @PostMapping("/{id}/comments")
+    @PreAuthorize("isAuthenticated()")
+    @ResponseStatus(HttpStatus.CREATED)
+    ScreenshotComment addComment(
+        @PathVariable("id") UUID id,
+        @Valid @RequestBody ScreenshotCommentRequest request,
+        @CurrentUserId UUID userId
+    ) {
+        return commentService.add(id, userId, request.getText());
     }
 
     @GetMapping("/{id}/crop/{width}")

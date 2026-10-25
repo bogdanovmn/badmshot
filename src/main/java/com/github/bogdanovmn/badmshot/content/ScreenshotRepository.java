@@ -49,15 +49,31 @@ public class ScreenshotRepository {
         .tournament(rs.getBoolean("tournament"))
         .players(playerNames(rs))
         .likes(rs.getLong("likes"))
+        .comments(rs.getLong("comments"))
+        .lastCommentAt(rs.getTimestamp("last_comment_at") == null
+            ? null
+            : rs.getTimestamp("last_comment_at").toInstant())
         .liked(rs.getBoolean("liked"))
         .views(rs.getLong("views"))
         .build();
+
+    private static final RowMapper<SharedFrame> SHARED_FRAME_ROW_MAPPER = (rs, rowNum) -> SharedFrame.builder()
+        .token(UUID.fromString(rs.getString("share_id")))
+        .views(rs.getLong("share_views"))
+        .createdAt(rs.getTimestamp("shared_at").toInstant())
+        .card(CARD_ROW_MAPPER.mapRow(rs, rowNum))
+        .build();
+
+    private static final String SHARED_CARD_SELECT_PREFIX =
+        "SELECT share.id AS share_id, share.views AS share_views, share.created_at AS shared_at, s.id, s.match_id";
 
     private static final String CARD_SELECT = """
         SELECT s.id, s.match_id, s.timecode_seconds, s.image_format, s.width, s.height, s.created_at, s.views,
                sess.year, sess.month, sess.match_date, sess.tournament, sess.club_id,
                coalesce(c.display_name, c.name) AS club_name,
                (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) AS likes,
+               (SELECT count(*) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) AS comments,
+               (SELECT max(sc.created_at) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) AS last_comment_at,
                EXISTS (
                    SELECT 1 FROM screenshot_like l2
                    WHERE l2.screenshot_id = s.id AND l2.user_id = :userId
@@ -72,6 +88,11 @@ public class ScreenshotRepository {
         LEFT JOIN player p ON p.id = mp.player_id
         LEFT JOIN player root_player ON root_player.id = coalesce(p.alias_of_player_id, p.id)
         """;
+
+    private static final String SHARED_CARD_SELECT = CARD_SELECT.replace(
+        "SELECT s.id, s.match_id",
+        SHARED_CARD_SELECT_PREFIX
+    );
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -298,11 +319,73 @@ public class ScreenshotRepository {
 
             GROUP BY s.id, m.id, sess.id, c.id
             HAVING (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) > 0
+                OR (SELECT count(*) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) > 0
                 OR s.views > 0
-            ORDER BY likes DESC, s.views DESC, s.created_at DESC
+            ORDER BY likes DESC, comments DESC, s.views DESC, s.created_at DESC
             LIMIT :limit
             """);
         return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
+    }
+
+    public List<ScreenshotCard> commentedCards(UUID userId, int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("limit", limit);
+        StringBuilder sql = new StringBuilder(CARD_SELECT);
+        sql.append("""
+
+            WHERE EXISTS (
+                SELECT 1 FROM screenshot_comment sc WHERE sc.screenshot_id = s.id
+            )
+            GROUP BY s.id, m.id, sess.id, c.id
+            ORDER BY last_comment_at DESC, s.created_at DESC
+            LIMIT :limit
+            """);
+        return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
+    }
+
+    public List<ScreenshotCard> userCommentedCards(UUID userId, int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("limit", limit);
+        StringBuilder sql = new StringBuilder(CARD_SELECT);
+        sql.append("""
+
+            JOIN screenshot_comment my_comment ON my_comment.screenshot_id = s.id
+                AND my_comment.user_id = :userId
+            GROUP BY s.id, m.id, sess.id, c.id
+            ORDER BY max(my_comment.created_at) DESC
+            LIMIT :limit
+            """);
+        return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
+    }
+
+    public List<SharedFrame> sharedFrames(UUID userId, int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("limit", limit);
+        StringBuilder sql = new StringBuilder(SHARED_CARD_SELECT);
+        sql.append("""
+
+            JOIN screenshot_share share ON share.screenshot_id = s.id AND share.user_id = :userId
+            GROUP BY s.id, m.id, sess.id, c.id, share.id, share.views, share.created_at
+            ORDER BY share.created_at DESC
+            LIMIT :limit
+            """);
+        return jdbc.query(sql.toString(), params, SHARED_FRAME_ROW_MAPPER);
+    }
+
+    public Optional<SharedFrame> sharedFrame(UUID token, UUID userId) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("token", token);
+        StringBuilder sql = new StringBuilder(SHARED_CARD_SELECT);
+        sql.append("""
+
+            JOIN screenshot_share share ON share.screenshot_id = s.id AND share.id = :token
+            GROUP BY s.id, m.id, sess.id, c.id, share.id, share.views, share.created_at
+            """);
+        return jdbc.query(sql.toString(), params, SHARED_FRAME_ROW_MAPPER).stream().findFirst();
     }
 
     public List<ScreenshotCard> likedCards(UUID userId, int limit) {

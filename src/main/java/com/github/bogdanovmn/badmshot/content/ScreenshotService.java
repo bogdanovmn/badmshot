@@ -26,6 +26,9 @@ class ScreenshotService {
     @Value("${badmshot.top-frames-limit:100}")
     private int topFramesLimit;
 
+    @Value("${badmshot.profile-frames-limit:200}")
+    private int profileFramesLimit;
+
     @Transactional(readOnly = true)
     ScreenshotCard random(UUID userId) {
         return next(ScreenshotFilter.empty(), userId);
@@ -80,6 +83,24 @@ class ScreenshotService {
     @Transactional(readOnly = true)
     List<ScreenshotCard> liked(UUID userId) {
         return screenshotRepository.likedCards(userId, topFramesLimit);
+    }
+
+    @Transactional(readOnly = true)
+    List<ScreenshotCard> commented(UUID userId) {
+        return screenshotRepository.commentedCards(userIdOrAnonymous(userId), topFramesLimit);
+    }
+
+    @Transactional(readOnly = true)
+    List<ScreenshotCard> myCommented(UUID userId) {
+        return screenshotRepository.userCommentedCards(userId, profileFramesLimit);
+    }
+
+    int topLimit() {
+        return topFramesLimit;
+    }
+
+    int profileLimit() {
+        return profileFramesLimit;
     }
 
     @Transactional(readOnly = true)

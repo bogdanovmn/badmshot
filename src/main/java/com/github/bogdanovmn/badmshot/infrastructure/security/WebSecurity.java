@@ -51,6 +51,7 @@ class WebSecurity {
 				.requestMatchers(HttpMethod.PUT, "/frame-effects").hasAuthority("admin")
 				.requestMatchers(HttpMethod.GET, "/screenshots/teaser").permitAll()
 				.requestMatchers(HttpMethod.GET, "/screenshots/*/crop/*").permitAll()
+				.requestMatchers("/shares/**").permitAll()
 				.requestMatchers("/archive/**").hasAuthority("admin")
 				.requestMatchers("/clubs/**").hasAuthority("admin")
 				.requestMatchers("/players/**").hasAuthority("admin")
