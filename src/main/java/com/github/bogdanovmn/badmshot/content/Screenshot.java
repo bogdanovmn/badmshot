@@ -15,5 +15,6 @@ public class Screenshot {
     String imageFormat;
     int width;
     int height;
+    long sizeBytes;
     Instant createdAt;
 }

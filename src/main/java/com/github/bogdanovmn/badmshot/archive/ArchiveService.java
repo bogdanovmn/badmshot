@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.archive;
 
 import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
+import com.github.bogdanovmn.badmshot.content.Screenshot;
 import com.github.bogdanovmn.badmshot.content.ScreenshotRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -98,7 +99,9 @@ class ArchiveService {
         validatePlayers(merged, match.getType());
 
         String relPath = match.getRelPath();
-        String newRelPath = buildRelPath(relPath, merged, parsed.getComment(), match.getType());
+        String newRelPath = ArchivePathBuilder.buildRelPath(
+            relPath, merged, parsed.getComment(), match.getType()
+        );
         if (newRelPath.equals(relPath)) {
             return matchRepository.brief(matchId).orElseThrow();
         }
@@ -156,27 +159,24 @@ class ArchiveService {
         }
     }
 
-    private String buildRelPath(String relPath, List<String> players, String comment, ArchiveType type) {
-        int slash = relPath.lastIndexOf('/');
-        String parent = slash < 0 ? "" : relPath.substring(0, slash);
-        String fileName = relPath.substring(slash + 1);
-        int dot = fileName.lastIndexOf('.');
-        String extension = dot < 0 ? ".mp4" : fileName.substring(dot);
-        String commentSuffix = comment == null || comment.isBlank() ? "" : "--" + comment;
-        String name;
-        if (type == ArchiveType.INDI) {
-            String base = dot < 0 ? fileName : fileName.substring(0, dot);
-            int marker = base.lastIndexOf("-indi");
-            String datePart = marker < 0 ? base : base.substring(0, marker);
-            String suffix = players.size() == 1
-                ? ""
-                : "--" + String.join("-", players);
-            name = datePart + "-indi" + suffix + commentSuffix + extension;
-        } else {
-            String dateDir = parent.substring(parent.lastIndexOf('/') + 1);
-            name = dateDir + "--" + String.join("-", players) + commentSuffix + extension;
+    @Transactional
+    void deleteMatch(UUID matchId) {
+        Match match = matchRepository.findById(matchId)
+            .orElseThrow(() -> new NoSuchElementException("Матч не найден: " + matchId));
+        matchRepository.deleteById(matchId);
+        if (match.getSessionId() != null) {
+            matchRepository.deleteSessionIfEmpty(match.getSessionId());
         }
-        return parent.isEmpty() ? name : parent + "/" + name;
+    }
+
+    @Transactional
+    void deleteScreenshot(UUID matchId, UUID screenshotId) {
+        Screenshot screenshot = screenshotRepository.findById(screenshotId)
+            .orElseThrow(() -> new NoSuchElementException("Кадр не найден: " + screenshotId));
+        if (!screenshot.getMatchId().equals(matchId)) {
+            throw new IllegalArgumentException("Кадр не принадлежит указанному матчу");
+        }
+        screenshotRepository.deleteById(screenshotId);
     }
 
     private void move(Path source, Path target) {

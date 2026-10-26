@@ -5,6 +5,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -97,6 +98,19 @@ class ArchiveController {
     @PostMapping("/matches/{id}/rename")
     MatchBrief rename(@PathVariable("id") UUID id, @RequestBody MatchRename request) {
         return archiveService.rename(id, request.getPlayers());
+    }
+
+    @DeleteMapping("/matches/{id}")
+    void deleteMatch(@PathVariable("id") UUID id) {
+        archiveService.deleteMatch(id);
+    }
+
+    @DeleteMapping("/matches/{matchId}/screenshots/{screenshotId}")
+    void deleteScreenshot(
+        @PathVariable("matchId") UUID matchId,
+        @PathVariable("screenshotId") UUID screenshotId
+    ) {
+        archiveService.deleteScreenshot(matchId, screenshotId);
     }
 
     @GetMapping("/stats")

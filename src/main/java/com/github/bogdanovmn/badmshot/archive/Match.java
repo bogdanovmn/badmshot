@@ -11,6 +11,7 @@ import java.util.UUID;
 @Builder
 class Match {
     UUID id;
+    UUID sessionId;
     ArchiveType type;
     String relPath;
     Integer year;

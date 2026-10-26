@@ -254,6 +254,31 @@ public class PlayerRepository {
         );
     }
 
+    public boolean existsByName(String name, UUID excludePlayerId) {
+        return jdbc.queryForObject("""
+                SELECT count(*)
+                FROM player
+                WHERE name = :name AND id <> :excludePlayerId
+                """,
+            new MapSqlParameterSource()
+                .addValue("name", name)
+                .addValue("excludePlayerId", excludePlayerId),
+            Integer.class
+        ) > 0;
+    }
+
+    public void updateName(UUID playerId, String name) {
+        jdbc.update("""
+                UPDATE player
+                SET name = :name
+                WHERE id = :playerId
+                """,
+            new MapSqlParameterSource()
+                .addValue("playerId", playerId)
+                .addValue("name", name)
+        );
+    }
+
     public void clearAlias(UUID playerId) {
         jdbc.update("""
                 UPDATE player

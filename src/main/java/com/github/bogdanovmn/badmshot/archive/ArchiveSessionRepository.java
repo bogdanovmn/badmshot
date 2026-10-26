@@ -209,7 +209,9 @@ class ArchiveSessionRepository {
                        m.validation_error, m.comment,
                        (SELECT count(*) FROM screenshot sh WHERE sh.match_id = m.id) AS screenshots,
                        array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
-                           FILTER (WHERE root_player.id IS NOT NULL) AS players
+                           FILTER (WHERE root_player.id IS NOT NULL) AS players,
+                       array_agg(root_player.id::text ORDER BY mp.position)
+                           FILTER (WHERE root_player.id IS NOT NULL) AS player_ids
                 FROM match m
                 LEFT JOIN match_player mp ON mp.match_id = m.id
                 LEFT JOIN player p ON p.id = mp.player_id
@@ -228,6 +230,7 @@ class ArchiveSessionRepository {
                             .id(UUID.fromString(rs.getString("id")))
                             .relPath(rs.getString("rel_path"))
                             .players(playerNames(rs))
+                            .playerIds(playerIds(rs))
                             .sizeMbytes(rs.getInt("size_mbytes"))
                             .durationSeconds((Integer) rs.getObject("duration_seconds"))
                             .screenshots(rs.getInt("screenshots"))
@@ -248,5 +251,17 @@ class ArchiveSessionRepository {
         }
         String[] values = (String[]) array.getArray();
         return values == null ? List.of() : Arrays.asList(values);
+    }
+
+    private static List<UUID> playerIds(ResultSet rs) throws SQLException {
+        Array array = rs.getArray("player_ids");
+        if (array == null) {
+            return List.of();
+        }
+        String[] values = (String[]) array.getArray();
+        if (values == null) {
+            return List.of();
+        }
+        return Arrays.stream(values).map(UUID::fromString).toList();
     }
 }

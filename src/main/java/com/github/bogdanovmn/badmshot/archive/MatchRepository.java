@@ -25,6 +25,9 @@ class MatchRepository {
 
     private static final RowMapper<Match> MATCH_ROW_MAPPER = (rs, rowNum) -> Match.builder()
         .id(UUID.fromString(rs.getString("id")))
+        .sessionId(rs.getString("session_id") == null
+            ? null
+            : UUID.fromString(rs.getString("session_id")))
         .type(ArchiveType.valueOf(rs.getString("type")))
         .relPath(rs.getString("rel_path"))
         .year((Integer) rs.getObject("year"))
@@ -60,7 +63,7 @@ class MatchRepository {
         .build();
 
     private static final String MATCH_SELECT = """
-        SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+        SELECT m.id, m.session_id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
                s.group_label, m.comment,
                m.duration_seconds, m.size_mbytes, m.validation_error, m.indexed_at,
                coalesce(c.display_name, c.name) AS club_name
@@ -186,6 +189,72 @@ class MatchRepository {
                 WHERE id = :matchId
                 """,
             Map.of("matchId", matchId, "relPath", relPath)
+        );
+    }
+
+    public void deleteById(UUID matchId) {
+        jdbc.update("""
+                DELETE FROM match
+                WHERE id = :matchId
+                """,
+            Map.of("matchId", matchId)
+        );
+    }
+
+    public void deleteSessionIfEmpty(UUID sessionId) {
+        jdbc.update("""
+                DELETE FROM archive_session s
+                WHERE s.id = :sessionId
+                  AND NOT EXISTS (
+                      SELECT 1 FROM match m WHERE m.session_id = s.id
+                  )
+                """,
+            Map.of("sessionId", sessionId)
+        );
+    }
+
+    public List<MatchBrief> byPlayer(UUID playerId) {
+        return jdbc.query(
+            BRIEF_SELECT + """
+
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM match_player mp2
+                    JOIN player p2 ON p2.id = mp2.player_id
+                    WHERE mp2.match_id = m.id
+                      AND coalesce(p2.alias_of_player_id, p2.id) = :playerId
+                )
+                GROUP BY m.id, s.id, c.id
+                ORDER BY s.match_date DESC NULLS LAST, m.rel_path
+                """,
+            Map.of("playerId", playerId),
+            MATCH_BRIEF_ROW_MAPPER
+        );
+    }
+
+    public List<MatchPlayerSlot> playerSlots(UUID playerId) {
+        return jdbc.query("""
+                SELECT m.id AS match_id, m.type, m.rel_path, mp.position,
+                       (
+                           SELECT count(*)
+                           FROM match_player mp2
+                           WHERE mp2.match_id = m.id
+                             AND mp2.player_id IS NOT NULL
+                             AND mp2.position < mp.position
+                       ) AS display_position
+                FROM match m
+                JOIN match_player mp ON mp.match_id = m.id
+                WHERE mp.player_id = :playerId
+                ORDER BY m.rel_path, mp.position
+                """,
+            Map.of("playerId", playerId),
+            (rs, rowNum) -> MatchPlayerSlot.builder()
+                .matchId(UUID.fromString(rs.getString("match_id")))
+                .type(ArchiveType.valueOf(rs.getString("type")))
+                .relPath(rs.getString("rel_path"))
+                .position(rs.getInt("position"))
+                .displayPosition(rs.getInt("display_position"))
+                .build()
         );
     }
 

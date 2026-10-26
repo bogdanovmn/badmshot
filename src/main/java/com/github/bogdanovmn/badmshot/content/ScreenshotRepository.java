@@ -30,6 +30,7 @@ public class ScreenshotRepository {
         .imageFormat(rs.getString("image_format"))
         .width(rs.getInt("width"))
         .height(rs.getInt("height"))
+        .sizeBytes(rs.getLong("size_bytes"))
         .createdAt(rs.getTimestamp("created_at").toInstant())
         .build();
 
@@ -188,7 +189,8 @@ public class ScreenshotRepository {
 
     public List<Screenshot> byMatch(UUID matchId) {
         return jdbc.query("""
-                SELECT id, match_id, timecode_seconds, image_format, width, height, created_at
+                SELECT id, match_id, timecode_seconds, image_format, width, height,
+                       octet_length(image) AS size_bytes, created_at
                 FROM screenshot
                 WHERE match_id = :matchId
                 ORDER BY timecode_seconds
@@ -199,13 +201,23 @@ public class ScreenshotRepository {
     }
 
     public Optional<Screenshot> findById(UUID id) {        return jdbc.query("""
-                SELECT id, match_id, timecode_seconds, image_format, width, height, created_at
+                SELECT id, match_id, timecode_seconds, image_format, width, height,
+                       octet_length(image) AS size_bytes, created_at
                 FROM screenshot
                 WHERE id = :id
                 """,
             Map.of("id", id),
             SCREENSHOT_ROW_MAPPER
         ).stream().findFirst();
+    }
+
+    public void deleteById(UUID id) {
+        jdbc.update("""
+                DELETE FROM screenshot
+                WHERE id = :id
+                """,
+            Map.of("id", id)
+        );
     }
 
     public Optional<ScreenshotImage> image(UUID id) {
