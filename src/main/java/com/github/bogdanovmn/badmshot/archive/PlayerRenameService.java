@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -73,9 +74,7 @@ public class PlayerRenameService {
         if (newName.equals(player.getName())) {
             return result(newName, 0);
         }
-        if (playerRepository.existsByName(newName, playerId)) {
-            throw new IllegalArgumentException("Игрок с таким именем уже существует: " + newName);
-        }
+        Optional<UUID> targetPlayerId = playerRepository.findIdByName(newName, playerId);
 
         List<RenameAction> actions = renameActions(playerId, newName);
         preflight(actions);
@@ -83,8 +82,17 @@ public class PlayerRenameService {
             move(workspace().resolve(action.relPath()), workspace().resolve(action.newRelPath()));
             matchRepository.updateRelPath(action.matchId(), action.newRelPath());
         }
-        playerRepository.updateName(playerId, newName);
-        log.info("Player {} renamed to {} in {} files", player.getName(), newName, actions.size());
+        if (targetPlayerId.isPresent()) {
+            matchRepository.reassignPlayer(playerId, targetPlayerId.get());
+            playerRepository.mergeInto(playerId, targetPlayerId.get());
+            log.info(
+                "Player {} merged into {} ({} files renamed)",
+                player.getName(), newName, actions.size()
+            );
+        } else {
+            playerRepository.updateName(playerId, newName);
+            log.info("Player {} renamed to {} in {} files", player.getName(), newName, actions.size());
+        }
         return result(newName, actions.size());
     }
 

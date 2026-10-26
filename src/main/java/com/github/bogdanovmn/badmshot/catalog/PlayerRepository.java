@@ -254,17 +254,17 @@ public class PlayerRepository {
         );
     }
 
-    public boolean existsByName(String name, UUID excludePlayerId) {
-        return jdbc.queryForObject("""
-                SELECT count(*)
+    public Optional<UUID> findIdByName(String name, UUID excludePlayerId) {
+        return jdbc.queryForList("""
+                SELECT id
                 FROM player
                 WHERE name = :name AND id <> :excludePlayerId
                 """,
             new MapSqlParameterSource()
                 .addValue("name", name)
                 .addValue("excludePlayerId", excludePlayerId),
-            Integer.class
-        ) > 0;
+            UUID.class
+        ).stream().findFirst();
     }
 
     public void updateName(UUID playerId, String name) {
@@ -276,6 +276,29 @@ public class PlayerRepository {
             new MapSqlParameterSource()
                 .addValue("playerId", playerId)
                 .addValue("name", name)
+        );
+    }
+
+    public void mergeInto(UUID playerId, UUID targetPlayerId) {
+        jdbc.update("""
+                UPDATE player
+                SET alias_of_player_id = :targetPlayerId
+                WHERE alias_of_player_id = :playerId
+                  AND id <> :targetPlayerId
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM player p
+                      WHERE p.alias_of_player_id = :targetPlayerId
+                        AND p.id <> :playerId
+                  )
+                """,
+            Map.of("playerId", playerId, "targetPlayerId", targetPlayerId)
+        );
+        jdbc.update("""
+                DELETE FROM player
+                WHERE id = :playerId
+                """,
+            Map.of("playerId", playerId)
         );
     }
 

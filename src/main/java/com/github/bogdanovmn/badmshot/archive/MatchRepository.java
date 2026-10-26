@@ -163,6 +163,16 @@ class MatchRepository {
         }
     }
 
+    public void reassignPlayer(UUID playerId, UUID targetPlayerId) {
+        jdbc.update("""
+                UPDATE match_player
+                SET player_id = :targetPlayerId
+                WHERE player_id = :playerId
+                """,
+            Map.of("playerId", playerId, "targetPlayerId", targetPlayerId)
+        );
+    }
+
     public void updateDuration(UUID matchId, int durationSeconds) {
         jdbc.update("""
                 UPDATE match
