@@ -11,5 +11,6 @@ class ArchiveYear {
     int year;
     int matches;
     int invalid;
+    int matched;
     List<ArchiveMonth> months;
 }

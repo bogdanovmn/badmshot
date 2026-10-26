@@ -12,5 +12,6 @@ class SessionManifestMatch {
     Integer durationSeconds;
     int sizeMbytes;
     List<String> players;
+    String comment;
     List<SessionManifestScreenshot> screenshots;
 }

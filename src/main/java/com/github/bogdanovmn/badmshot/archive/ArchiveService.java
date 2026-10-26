@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.archive;
 
 import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
+import com.github.bogdanovmn.badmshot.content.Screenshot;
 import com.github.bogdanovmn.badmshot.content.ScreenshotRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,9 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ class ArchiveService {
     private final PlayerRepository playerRepository;
     private final ScreenshotRepository screenshotRepository;
     private final StatisticsRepository statisticsRepository;
+    private final ArchivePathParser pathParser;
 
     @Value("${badmshot.archive-dir}")
     private String archiveDir;
@@ -32,8 +36,11 @@ class ArchiveService {
     private boolean readOnly;
 
     @Transactional(readOnly = true)
-    List<ArchiveYear> tree(ArchiveType type) {
-        return matchRepository.tree(type);
+    List<ArchiveYear> tree(ArchiveType type, UUID playerId) {
+        UUID canonicalPlayerId = playerId == null
+            ? null
+            : playerRepository.canonicalId(playerId).orElse(playerId);
+        return matchRepository.tree(type, canonicalPlayerId);
     }
 
     @Transactional(readOnly = true)
@@ -87,20 +94,14 @@ class ArchiveService {
         List<String> cleaned = players == null
             ? List.of()
             : players.stream().map(String::trim).filter(name -> !name.isBlank()).toList();
-        if (match.getType() == ArchiveType.INDI) {
-            boolean defaultPlayer = cleaned.size() == 1
-                && ArchivePathParser.DEFAULT_INDI_PLAYER.equals(cleaned.get(0));
-            if (cleaned.size() != 2 && !defaultPlayer) {
-                throw new IllegalArgumentException(
-                    "Ожидается 2 игрока (или 1 игрок по умолчанию), получено: " + cleaned.size()
-                );
-            }
-        } else if (cleaned.size() != 2 && cleaned.size() != 4) {
-            throw new IllegalArgumentException("Ожидается 2 или 4 игрока, получено: " + cleaned.size());
-        }
+        ArchivePath parsed = pathParser.parse(match.getRelPath());
+        List<String> merged = mergeWithPlaceholders(parsed.getPlayers(), cleaned);
+        validatePlayers(merged, match.getType());
 
         String relPath = match.getRelPath();
-        String newRelPath = buildRelPath(relPath, cleaned, match.getType());
+        String newRelPath = ArchivePathBuilder.buildRelPath(
+            relPath, merged, parsed.getComment(), match.getType()
+        );
         if (newRelPath.equals(relPath)) {
             return matchRepository.brief(matchId).orElseThrow();
         }
@@ -116,31 +117,66 @@ class ArchiveService {
         move(source, target);
 
         matchRepository.updateRelPath(matchId, newRelPath);
-        List<UUID> playerIds = cleaned.stream().map(playerRepository::upsert).toList();
+        List<UUID> playerIds = merged.stream()
+            .map(name -> ArchivePathParser.isSkip(name) ? null : playerRepository.upsert(name))
+            .collect(Collectors.toList());
         matchRepository.replacePlayers(matchId, playerIds);
         return matchRepository.brief(matchId).orElseThrow();
     }
 
-    private String buildRelPath(String relPath, List<String> players, ArchiveType type) {
-        int slash = relPath.lastIndexOf('/');
-        String parent = slash < 0 ? "" : relPath.substring(0, slash);
-        String fileName = relPath.substring(slash + 1);
-        int dot = fileName.lastIndexOf('.');
-        String extension = dot < 0 ? ".mp4" : fileName.substring(dot);
-        String name;
-        if (type == ArchiveType.INDI) {
-            String base = dot < 0 ? fileName : fileName.substring(0, dot);
-            int marker = base.lastIndexOf("-indi");
-            String datePart = marker < 0 ? base : base.substring(0, marker);
-            String suffix = players.size() == 1
-                ? ""
-                : "--" + String.join("-", players);
-            name = datePart + "-indi" + suffix + extension;
-        } else {
-            String dateDir = parent.substring(parent.lastIndexOf('/') + 1);
-            name = dateDir + "--" + String.join("-", players) + extension;
+    private List<String> mergeWithPlaceholders(List<String> current, List<String> edited) {
+        long visible = current.stream().filter(name -> !ArchivePathParser.isSkip(name)).count();
+        if (visible == current.size()) {
+            return edited;
         }
-        return parent.isEmpty() ? name : parent + "/" + name;
+        if (edited.size() != visible) {
+            throw new IllegalArgumentException(
+                "Количество игроков не совпадает с файлом: ожидается " + visible
+                    + " (позиции-заглушки skip сохраняются отдельно)"
+            );
+        }
+        List<String> merged = new ArrayList<>(current.size());
+        int editedIndex = 0;
+        for (String name : current) {
+            merged.add(ArchivePathParser.isSkip(name)
+                ? ArchivePathParser.SKIP_PLAYER
+                : edited.get(editedIndex++));
+        }
+        return merged;
+    }
+
+    private void validatePlayers(List<String> players, ArchiveType type) {
+        if (type == ArchiveType.INDI) {
+            boolean defaultPlayer = players.size() == 1
+                && ArchivePathParser.DEFAULT_INDI_PLAYER.equals(players.get(0));
+            if (players.size() != 2 && !defaultPlayer) {
+                throw new IllegalArgumentException(
+                    "Ожидается 2 игрока (или 1 игрок по умолчанию), получено: " + players.size()
+                );
+            }
+        } else if (players.size() != 2 && players.size() != 4) {
+            throw new IllegalArgumentException("Ожидается 2 или 4 игрока, получено: " + players.size());
+        }
+    }
+
+    @Transactional
+    void deleteMatch(UUID matchId) {
+        Match match = matchRepository.findById(matchId)
+            .orElseThrow(() -> new NoSuchElementException("Матч не найден: " + matchId));
+        matchRepository.deleteById(matchId);
+        if (match.getSessionId() != null) {
+            matchRepository.deleteSessionIfEmpty(match.getSessionId());
+        }
+    }
+
+    @Transactional
+    void deleteScreenshot(UUID matchId, UUID screenshotId) {
+        Screenshot screenshot = screenshotRepository.findById(screenshotId)
+            .orElseThrow(() -> new NoSuchElementException("Кадр не найден: " + screenshotId));
+        if (!screenshot.getMatchId().equals(matchId)) {
+            throw new IllegalArgumentException("Кадр не принадлежит указанному матчу");
+        }
+        screenshotRepository.deleteById(screenshotId);
     }
 
     private void move(Path source, Path target) {

@@ -152,4 +152,112 @@ class ArchivePathParserTest {
         assertFalse(path.valid());
         assertTrue(path.getValidationError().contains("не совпадает с годом"));
     }
+
+    @Test
+    void keepsSkipPlayersAsPlaceholders() {
+        ArchivePath path = parser.parse(
+            "games/2024/2024-04/2024-04-17-lesteh/"
+                + "2024-04-17-lesteh--olyaZ-skip-misha-skip.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals(List.of("olyaZ", "skip", "misha", "skip"), path.getPlayers());
+    }
+
+    @Test
+    void normalizesSkipKeywordCase() {
+        ArchivePath path = parser.parse(
+            "games/2024/2024-04/2024-04-17-lesteh/"
+                + "2024-04-17-lesteh--olyaZ-SKIP-misha-Skip.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals(List.of("olyaZ", "skip", "misha", "skip"), path.getPlayers());
+    }
+
+    @Test
+    void ignoresCommentSuffixInFileName() {
+        ArchivePath path = parser.parse(
+            "games/2026/2026-08/2026-08-16-t-newton/"
+                + "2026-08-16-t-newton--bogdanovM-penevaE-brehovskyhV-markovaA--blablablaIgnoreMe.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals(
+            List.of("bogdanovM", "penevaE", "brehovskyhV", "markovaA"),
+            path.getPlayers()
+        );
+        assertEquals("blablablaIgnoreMe", path.getComment());
+    }
+
+    @Test
+    void rejectsEmptyCommentSuffix() {
+        ArchivePath path = parser.parse(
+            "games/2026/2026-08/2026-08-16-t-newton/"
+                + "2026-08-16-t-newton--bogdanovM-penevaE-brehovskyhV-markovaA--.mp4"
+        );
+
+        assertFalse(path.valid());
+        assertTrue(path.getValidationError().contains("Пустой комментарий"));
+    }
+
+    @Test
+    void parsesTournamentGroupLabel() {
+        ArchivePath path = parser.parse(
+            "games/2026/2026-08/2026-08-16-t-newton-XDF/"
+                + "2026-08-16-t-newton-XDF--bogdanovM-penevaE-brehovskyhV-markovaA.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertTrue(path.isTournament());
+        assertEquals("newton", path.getClub());
+        assertEquals("XDF", path.getGroup());
+        assertEquals("2026-08-16-t-newton-XDF", path.getSessionName());
+    }
+
+    @Test
+    void normalizesTournamentGroupLabelToUpperCase() {
+        ArchivePath path = parser.parse(
+            "games/2026/2026-08/2026-08-16-t-newton-dg/"
+                + "2026-08-16-t-newton-dg--bogdanovM-penevaE-brehovskyhV-markovaA.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals("newton", path.getClub());
+        assertEquals("DG", path.getGroup());
+    }
+
+    @Test
+    void doesNotTreatClubAsGroupOutsideTournament() {
+        ArchivePath path = parser.parse(
+            "games/2023/2023-05/2023-05-14-ab/2023-05-14-ab--Ivanov-Petrov.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals("ab", path.getClub());
+        assertNull(path.getGroup());
+    }
+
+    @Test
+    void keepsLongClubNameAsClub() {
+        ArchivePath path = parser.parse(
+            "games/2023/2023-05/2023-05-20-t-badminton-club/"
+                + "2023-05-20-t-badminton-club--Ivanov-Petrov-Sidorov-Kuznetsov.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals("badminton-club", path.getClub());
+        assertNull(path.getGroup());
+    }
+
+    @Test
+    void parsesIndiCommentSuffix() {
+        ArchivePath path = parser.parse(
+            "indi/2026/2026-03/2026-03-04-indi--Ivanov-Petrov--note.mp4"
+        );
+
+        assertTrue(path.valid(), path.getValidationError());
+        assertEquals(List.of("Ivanov", "Petrov"), path.getPlayers());
+        assertEquals("note", path.getComment());
+    }
 }

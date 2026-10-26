@@ -82,7 +82,7 @@ class ArchiveIndexTask {
         }
         if (parsed.valid()) {
             playerIds = parsed.getPlayers().stream()
-                .map(playerRepository::upsert)
+                .map(name -> ArchivePathParser.isSkip(name) ? null : playerRepository.upsert(name))
                 .collect(Collectors.toList());
         }
 
@@ -93,6 +93,7 @@ class ArchiveIndexTask {
                 parsed.sessionDate(),
                 clubId,
                 parsed.isTournament(),
+                parsed.getGroup(),
                 type
             );
 
@@ -101,6 +102,7 @@ class ArchiveIndexTask {
             sessionId,
             sizeMbytes,
             parsed.getValidationError(),
+            parsed.getComment(),
             type
         );
         matchRepository.replacePlayers(matchId, playerIds);

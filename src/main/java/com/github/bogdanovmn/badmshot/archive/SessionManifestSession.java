@@ -13,4 +13,5 @@ class SessionManifestSession {
     LocalDate matchDate;
     String club;
     boolean tournament;
+    String group;
 }

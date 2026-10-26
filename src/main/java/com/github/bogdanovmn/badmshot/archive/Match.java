@@ -11,6 +11,7 @@ import java.util.UUID;
 @Builder
 class Match {
     UUID id;
+    UUID sessionId;
     ArchiveType type;
     String relPath;
     Integer year;
@@ -19,6 +20,8 @@ class Match {
     UUID clubId;
     String clubName;
     boolean tournament;
+    String group;
+    String comment;
     Integer durationSeconds;
     int sizeMbytes;
     String validationError;

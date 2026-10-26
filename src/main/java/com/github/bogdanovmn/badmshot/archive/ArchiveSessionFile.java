@@ -12,8 +12,10 @@ class ArchiveSessionFile {
     UUID id;
     String relPath;
     List<String> players;
+    List<UUID> playerIds;
     int sizeMbytes;
     Integer durationSeconds;
     int screenshots;
     String validationError;
+    String comment;
 }

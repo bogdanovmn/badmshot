@@ -4,7 +4,7 @@ services:
     image: badmshot:${BACKEND_VERSION:-latest}
     container_name: badmshot-container
     ports:
-      - "8086:8080"
+      - "8087:8080"
     env_file:
       - .env
     environment:
@@ -21,7 +21,6 @@ services:
     volumes:
       - /var/log/badmshot:/app/logs
       - /home/backend/auth-service/jwt:/app/jwt
-      - /home/backend/badminton-archive:/archive
     networks:
       - shared-network
 

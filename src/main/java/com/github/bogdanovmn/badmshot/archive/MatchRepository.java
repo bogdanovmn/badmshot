@@ -25,6 +25,9 @@ class MatchRepository {
 
     private static final RowMapper<Match> MATCH_ROW_MAPPER = (rs, rowNum) -> Match.builder()
         .id(UUID.fromString(rs.getString("id")))
+        .sessionId(rs.getString("session_id") == null
+            ? null
+            : UUID.fromString(rs.getString("session_id")))
         .type(ArchiveType.valueOf(rs.getString("type")))
         .relPath(rs.getString("rel_path"))
         .year((Integer) rs.getObject("year"))
@@ -33,6 +36,8 @@ class MatchRepository {
         .clubId(rs.getString("club_id") == null ? null : UUID.fromString(rs.getString("club_id")))
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
+        .group(rs.getString("group_label"))
+        .comment(rs.getString("comment"))
         .durationSeconds((Integer) rs.getObject("duration_seconds"))
         .sizeMbytes(rs.getInt("size_mbytes"))
         .validationError(rs.getString("validation_error"))
@@ -49,6 +54,8 @@ class MatchRepository {
         .clubId(rs.getString("club_id") == null ? null : UUID.fromString(rs.getString("club_id")))
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
+        .group(rs.getString("group_label"))
+        .comment(rs.getString("comment"))
         .durationSeconds((Integer) rs.getObject("duration_seconds"))
         .sizeMbytes(rs.getInt("size_mbytes"))
         .validationError(rs.getString("validation_error"))
@@ -56,7 +63,8 @@ class MatchRepository {
         .build();
 
     private static final String MATCH_SELECT = """
-        SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+        SELECT m.id, m.session_id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+               s.group_label, m.comment,
                m.duration_seconds, m.size_mbytes, m.validation_error, m.indexed_at,
                coalesce(c.display_name, c.name) AS club_name
         FROM match m
@@ -66,6 +74,7 @@ class MatchRepository {
 
     private static final String BRIEF_SELECT = """
         SELECT m.id, m.type, m.rel_path, s.year, s.month, s.match_date, s.club_id, s.tournament,
+               s.group_label, m.comment,
                m.duration_seconds, m.size_mbytes, m.validation_error,
                coalesce(c.display_name, c.name) AS club_name,
                array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
@@ -85,15 +94,17 @@ class MatchRepository {
         UUID sessionId,
         int sizeMbytes,
         String validationError,
+        String comment,
         ArchiveType type
     ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error, type)
-                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError, :type)
+                INSERT INTO match (rel_path, session_id, size_mbytes, validation_error, comment, type)
+                VALUES (:relPath, :sessionId, :sizeMbytes, :validationError, :comment, :type)
                 ON CONFLICT (rel_path) DO UPDATE SET
                     session_id = EXCLUDED.session_id,
                     size_mbytes = EXCLUDED.size_mbytes,
                     validation_error = EXCLUDED.validation_error,
+                    comment = EXCLUDED.comment,
                     type = EXCLUDED.type,
                     indexed_at = now()
                 RETURNING id
@@ -103,6 +114,7 @@ class MatchRepository {
                 .addValue("sessionId", sessionId)
                 .addValue("sizeMbytes", sizeMbytes)
                 .addValue("validationError", validationError)
+                .addValue("comment", comment)
                 .addValue("type", type.name()),
             UUID.class
         );
@@ -113,11 +125,12 @@ class MatchRepository {
         String relPath,
         Integer durationSeconds,
         int sizeMbytes,
+        String comment,
         ArchiveType type
     ) {
         return jdbc.queryForObject("""
-                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes, type)
-                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes, :type)
+                INSERT INTO match (session_id, rel_path, duration_seconds, size_mbytes, comment, type)
+                VALUES (:sessionId, :relPath, :durationSeconds, :sizeMbytes, :comment, :type)
                 RETURNING id
                 """,
             new MapSqlParameterSource()
@@ -125,6 +138,7 @@ class MatchRepository {
                 .addValue("relPath", relPath)
                 .addValue("durationSeconds", durationSeconds)
                 .addValue("sizeMbytes", sizeMbytes)
+                .addValue("comment", comment)
                 .addValue("type", type.name()),
             UUID.class
         );
@@ -141,13 +155,22 @@ class MatchRepository {
                     INSERT INTO match_player (match_id, player_id, position)
                     VALUES (:matchId, :playerId, :position)
                     """,
-                Map.of(
-                    "matchId", matchId,
-                    "playerId", playerIds.get(position),
-                    "position", position
-                )
+                new MapSqlParameterSource()
+                    .addValue("matchId", matchId)
+                    .addValue("playerId", playerIds.get(position))
+                    .addValue("position", position)
             );
         }
+    }
+
+    public void reassignPlayer(UUID playerId, UUID targetPlayerId) {
+        jdbc.update("""
+                UPDATE match_player
+                SET player_id = :targetPlayerId
+                WHERE player_id = :playerId
+                """,
+            Map.of("playerId", playerId, "targetPlayerId", targetPlayerId)
+        );
     }
 
     public void updateDuration(UUID matchId, int durationSeconds) {
@@ -176,6 +199,72 @@ class MatchRepository {
                 WHERE id = :matchId
                 """,
             Map.of("matchId", matchId, "relPath", relPath)
+        );
+    }
+
+    public void deleteById(UUID matchId) {
+        jdbc.update("""
+                DELETE FROM match
+                WHERE id = :matchId
+                """,
+            Map.of("matchId", matchId)
+        );
+    }
+
+    public void deleteSessionIfEmpty(UUID sessionId) {
+        jdbc.update("""
+                DELETE FROM archive_session s
+                WHERE s.id = :sessionId
+                  AND NOT EXISTS (
+                      SELECT 1 FROM match m WHERE m.session_id = s.id
+                  )
+                """,
+            Map.of("sessionId", sessionId)
+        );
+    }
+
+    public List<MatchBrief> byPlayer(UUID playerId) {
+        return jdbc.query(
+            BRIEF_SELECT + """
+
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM match_player mp2
+                    JOIN player p2 ON p2.id = mp2.player_id
+                    WHERE mp2.match_id = m.id
+                      AND coalesce(p2.alias_of_player_id, p2.id) = :playerId
+                )
+                GROUP BY m.id, s.id, c.id
+                ORDER BY s.match_date DESC NULLS LAST, m.rel_path
+                """,
+            Map.of("playerId", playerId),
+            MATCH_BRIEF_ROW_MAPPER
+        );
+    }
+
+    public List<MatchPlayerSlot> playerSlots(UUID playerId) {
+        return jdbc.query("""
+                SELECT m.id AS match_id, m.type, m.rel_path, mp.position,
+                       (
+                           SELECT count(*)
+                           FROM match_player mp2
+                           WHERE mp2.match_id = m.id
+                             AND mp2.player_id IS NOT NULL
+                             AND mp2.position < mp.position
+                       ) AS display_position
+                FROM match m
+                JOIN match_player mp ON mp.match_id = m.id
+                WHERE mp.player_id = :playerId
+                ORDER BY m.rel_path, mp.position
+                """,
+            Map.of("playerId", playerId),
+            (rs, rowNum) -> MatchPlayerSlot.builder()
+                .matchId(UUID.fromString(rs.getString("match_id")))
+                .type(ArchiveType.valueOf(rs.getString("type")))
+                .relPath(rs.getString("rel_path"))
+                .position(rs.getInt("position"))
+                .displayPosition(rs.getInt("display_position"))
+                .build()
         );
     }
 
@@ -318,18 +407,36 @@ class MatchRepository {
         return jdbc.queryForObject(sql.toString(), params, Integer.class);
     }
 
-    public List<ArchiveYear> tree(ArchiveType type) {
-        return jdbc.query("""
+    public List<ArchiveYear> tree(ArchiveType type, UUID playerId) {
+        String matchedExpression = playerId == null
+            ? "0"
+            : """
+                count(*) FILTER (WHERE EXISTS (
+                    SELECT 1
+                    FROM match_player mp
+                    JOIN player p ON p.id = mp.player_id
+                    WHERE mp.match_id = m.id
+                      AND coalesce(p.alias_of_player_id, p.id) = :playerId
+                ))
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("type", type.name());
+        if (playerId != null) {
+            params.addValue("playerId", playerId);
+        }
+        return jdbc.query(
+            """
                 SELECT s.year, s.month,
                        count(m.id) AS matches,
-                       count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid
+                       count(*) FILTER (WHERE m.validation_error IS NOT NULL) AS invalid,
+                       %s AS matched
                 FROM archive_session s
                 JOIN match m ON m.session_id = s.id
                 WHERE s.year IS NOT NULL AND s.type = :type
                 GROUP BY s.year, s.month
                 ORDER BY s.year DESC, s.month DESC
-                """,
-            Map.of("type", type.name()),
+                """.formatted(matchedExpression),
+            params,
             (ResultSetExtractor<List<ArchiveYear>>) rs -> {
                 LinkedHashMap<Integer, List<ArchiveMonth>> byYear = new LinkedHashMap<>();
                 while (rs.next()) {
@@ -339,6 +446,7 @@ class MatchRepository {
                             .month(rs.getInt("month"))
                             .matches(rs.getInt("matches"))
                             .invalid(rs.getInt("invalid"))
+                            .matched(rs.getInt("matched"))
                             .build()
                     );
                 }
@@ -347,6 +455,7 @@ class MatchRepository {
                         .year(entry.getKey())
                         .matches(entry.getValue().stream().mapToInt(ArchiveMonth::getMatches).sum())
                         .invalid(entry.getValue().stream().mapToInt(ArchiveMonth::getInvalid).sum())
+                        .matched(entry.getValue().stream().mapToInt(ArchiveMonth::getMatched).sum())
                         .months(entry.getValue())
                         .build()
                     )

@@ -98,6 +98,7 @@ public class PlayerRepository {
         }
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
                   AND p.id IN (
                     SELECT coalesce(pp.alias_of_player_id, pp.id)
                     FROM player pp
@@ -115,6 +116,7 @@ public class PlayerRepository {
         String searchTerm = FullTextQuery.normalized(term);
         StringBuilder sql = new StringBuilder(PLAYER_SELECT).append("""
                 WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("term", searchTerm)
@@ -177,6 +179,31 @@ public class PlayerRepository {
         return 0.85;
     }
 
+    public List<Player> byLetter(String letter) {
+        return jdbc.query(PLAYER_SELECT + """
+                WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
+                  AND upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) = upper(:letter)
+                ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
+                """,
+            Map.of("letter", letter),
+            PLAYER_ROW_MAPPER
+        );
+    }
+
+    public List<String> letters() {
+        return jdbc.queryForList("""
+                SELECT DISTINCT upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) AS letter
+                FROM player p
+                WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
+                ORDER BY letter
+                """,
+            Map.of(),
+            String.class
+        );
+    }
+
     public List<Player> byMatch(UUID matchId) {
         return jdbc.query(PLAYER_SELECT + """
                 JOIN match_player mp ON mp.player_id = p.id
@@ -201,7 +228,9 @@ public class PlayerRepository {
                     WHERE m.type = :type
                 ) t
                 JOIN player p ON p.id = t.root_id
+                WHERE lower(p.name) <> 'skip'
                 GROUP BY p.id, p.name, p.display_name
+                HAVING count(*) > 2
                 ORDER BY label
                 """,
             Map.of("type", type.name()),
@@ -222,6 +251,54 @@ public class PlayerRepository {
             new MapSqlParameterSource()
                 .addValue("playerId", playerId)
                 .addValue("displayName", displayName)
+        );
+    }
+
+    public Optional<UUID> findIdByName(String name, UUID excludePlayerId) {
+        return jdbc.queryForList("""
+                SELECT id
+                FROM player
+                WHERE name = :name AND id <> :excludePlayerId
+                """,
+            new MapSqlParameterSource()
+                .addValue("name", name)
+                .addValue("excludePlayerId", excludePlayerId),
+            UUID.class
+        ).stream().findFirst();
+    }
+
+    public void updateName(UUID playerId, String name) {
+        jdbc.update("""
+                UPDATE player
+                SET name = :name
+                WHERE id = :playerId
+                """,
+            new MapSqlParameterSource()
+                .addValue("playerId", playerId)
+                .addValue("name", name)
+        );
+    }
+
+    public void mergeInto(UUID playerId, UUID targetPlayerId) {
+        jdbc.update("""
+                UPDATE player
+                SET alias_of_player_id = :targetPlayerId
+                WHERE alias_of_player_id = :playerId
+                  AND id <> :targetPlayerId
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM player p
+                      WHERE p.alias_of_player_id = :targetPlayerId
+                        AND p.id <> :playerId
+                  )
+                """,
+            Map.of("playerId", playerId, "targetPlayerId", targetPlayerId)
+        );
+        jdbc.update("""
+                DELETE FROM player
+                WHERE id = :playerId
+                """,
+            Map.of("playerId", playerId)
         );
     }
 

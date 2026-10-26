@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="020-comments-shares-profile" author="badmshot">
+        <sql>
+            CREATE TABLE screenshot_comment (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                screenshot_id uuid NOT NULL REFERENCES screenshot(id) ON DELETE CASCADE,
+                user_id uuid NOT NULL REFERENCES app_user(id),
+                text varchar(1000) NOT NULL,
+                created_at timestamp NOT NULL DEFAULT now()
+            );
+            CREATE INDEX screenshot_comment_screenshot_idx ON screenshot_comment (screenshot_id, created_at DESC);
+            CREATE INDEX screenshot_comment_user_idx ON screenshot_comment (user_id, created_at DESC);
+
+            CREATE TABLE screenshot_share (
+                id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                screenshot_id uuid NOT NULL REFERENCES screenshot(id) ON DELETE CASCADE,
+                user_id uuid NOT NULL REFERENCES app_user(id),
+                views bigint NOT NULL DEFAULT 0,
+                created_at timestamp NOT NULL DEFAULT now(),
+                UNIQUE (screenshot_id, user_id)
+            );
+            CREATE INDEX screenshot_share_user_idx ON screenshot_share (user_id, created_at DESC);
+            CREATE INDEX screenshot_share_screenshot_idx ON screenshot_share (screenshot_id);
+
+            CREATE TABLE screenshot_share_view (
+                share_id uuid NOT NULL REFERENCES screenshot_share(id) ON DELETE CASCADE,
+                visitor_key varchar(200) NOT NULL,
+                viewed_at timestamp NOT NULL DEFAULT now(),
+                PRIMARY KEY (share_id, visitor_key)
+            );
+            CREATE INDEX screenshot_share_view_share_idx ON screenshot_share_view (share_id, viewed_at DESC);
+
+            CREATE TABLE user_frame_filter (
+                user_id uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+                player_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+                club_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+                include_indi boolean NOT NULL DEFAULT false,
+                updated_at timestamp NOT NULL DEFAULT now()
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -53,10 +53,14 @@ badmshot:
     min-seconds-between-frames: 3
     free-frames: 3
   top-frames-limit: 15
+  profile-frames-limit: 200
   teaser:
     cache-days: 1
   views:
     cooldown-seconds: 300
+  shares:
+    view-cooldown-seconds: 300
+    visitor-salt: ${BADMSHOT_SHARE_VISITOR_SALT:badmshot}
   filters:
     limit: 50
 
