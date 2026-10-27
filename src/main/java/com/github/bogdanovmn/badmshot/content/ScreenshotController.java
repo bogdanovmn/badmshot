@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.content;
 
 import com.github.bogdanovmn.badmshot.infrastructure.security.CurrentUserId;
+import com.fasterxml.jackson.annotation.JsonView;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -47,8 +48,9 @@ class ScreenshotController {
 
     @GetMapping("/top")
     @PreAuthorize("isAuthenticated()")
-    List<ScreenshotCard> top(@CurrentUserId UUID userId) {
-        return screenshotService.top(userId);
+    @JsonView(ScreenshotCard.PublicView.class)
+    List<ScreenshotCard> top() {
+        return screenshotService.top();
     }
 
     @GetMapping("/commented")

@@ -8,5 +8,6 @@
     <include file="db/changelog/001-initial.xml"/>
     <include file="db/changelog/010-archive-path-rules.xml"/>
     <include file="db/changelog/020-comments-shares-profile.xml"/>
+    <include file="db/changelog/030-query-performance.xml"/>
 
 </databaseChangeLog>

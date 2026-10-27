@@ -1,5 +1,6 @@
 package com.github.bogdanovmn.badmshot.content;
 
+import com.fasterxml.jackson.annotation.JsonView;
 import lombok.Builder;
 import lombok.Value;
 
@@ -11,6 +12,15 @@ import java.util.UUID;
 @Value
 @Builder
 class ScreenshotCard {
+
+    /** Публичный ответ: без персонального флага {@code liked} (например, ТОП, кэшируемый nginx). */
+    interface PublicView {
+    }
+
+    /** Персональный ответ: полный набор полей (страница кадра, ленты). */
+    interface PersonalView extends PublicView {
+    }
+
     UUID id;
     UUID matchId;
     int timecodeSeconds;
@@ -29,6 +39,7 @@ class ScreenshotCard {
     long shares;
     long comments;
     Instant lastCommentAt;
+    @JsonView(PersonalView.class)
     boolean liked;
     long views;
 }

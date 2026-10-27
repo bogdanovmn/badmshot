@@ -14,8 +14,10 @@ import java.sql.Types;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -241,20 +243,23 @@ public class ScreenshotRepository {
         UUID userId,
         ServedFrame exclude
     ) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-            .addValue("userId", userId)
-            .addValue("limit", 1);
-        StringBuilder sql = new StringBuilder(CARD_SELECT);
-        applyFilter(sql, params, filter);
-        sql.append("""
+        return randomId(filter, exclude).flatMap(id -> card(id, userId));
+    }
 
-            GROUP BY s.id, m.id, sess.id, c.id
+    private Optional<UUID> randomId(ScreenshotFilter filter, ServedFrame exclude) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        StringBuilder sql = new StringBuilder("""
+            SELECT s.id
+            FROM screenshot s
+            JOIN match m ON m.id = s.match_id
+            JOIN archive_session sess ON sess.id = m.session_id
             """);
+        applyFilter(sql, params, filter);
         sql.append(randomOrder(params, exclude));
         sql.append("""
-             LIMIT :limit
+             LIMIT 1
             """);
-        return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER).stream().findFirst();
+        return jdbc.queryForList(sql.toString(), params, UUID.class).stream().findFirst();
     }
 
     private String randomOrder(MapSqlParameterSource params, ServedFrame exclude) {
@@ -325,21 +330,67 @@ public class ScreenshotRepository {
     }
 
     public List<ScreenshotCard> topCards(UUID userId, int limit) {
+        return cardsByIds(topIds(limit), userId);
+    }
+
+    public List<UUID> topIds(int limit) {
+        return jdbc.queryForList("""
+                WITH like_count AS (
+                    SELECT screenshot_id, count(*) AS cnt
+                    FROM screenshot_like
+                    GROUP BY screenshot_id
+                ),
+                share_count AS (
+                    SELECT screenshot_id, count(*) AS cnt
+                    FROM screenshot_share
+                    GROUP BY screenshot_id
+                ),
+                comment_count AS (
+                    SELECT screenshot_id, count(*) AS cnt
+                    FROM screenshot_comment
+                    GROUP BY screenshot_id
+                )
+                SELECT s.id
+                FROM screenshot s
+                LEFT JOIN like_count lc ON lc.screenshot_id = s.id
+                LEFT JOIN share_count sc ON sc.screenshot_id = s.id
+                LEFT JOIN comment_count cc ON cc.screenshot_id = s.id
+                WHERE coalesce(lc.cnt, 0) > 0
+                   OR coalesce(sc.cnt, 0) > 0
+                   OR coalesce(cc.cnt, 0) > 0
+                   OR s.views > 0
+                ORDER BY coalesce(lc.cnt, 0) DESC,
+                         coalesce(sc.cnt, 0) DESC,
+                         coalesce(cc.cnt, 0) DESC,
+                         s.views DESC,
+                         s.created_at DESC
+                LIMIT :limit
+                """,
+            Map.of("limit", limit),
+            UUID.class
+        );
+    }
+
+    public List<ScreenshotCard> cardsByIds(List<UUID> ids, UUID userId) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("userId", userId)
-            .addValue("limit", limit);
+            .addValue("ids", ids);
         StringBuilder sql = new StringBuilder(CARD_SELECT);
         sql.append("""
 
+            WHERE s.id IN (:ids)
             GROUP BY s.id, m.id, sess.id, c.id
-            HAVING (SELECT count(*) FROM screenshot_like l WHERE l.screenshot_id = s.id) > 0
-                OR (SELECT count(*) FROM screenshot_share sh WHERE sh.screenshot_id = s.id) > 0
-                OR (SELECT count(*) FROM screenshot_comment sc WHERE sc.screenshot_id = s.id) > 0
-                OR s.views > 0
-            ORDER BY likes DESC, shares DESC, comments DESC, s.views DESC, s.created_at DESC
-            LIMIT :limit
             """);
-        return jdbc.query(sql.toString(), params, CARD_ROW_MAPPER);
+        Map<UUID, ScreenshotCard> cards = new HashMap<>();
+        jdbc.query(sql.toString(), params, CARD_ROW_MAPPER)
+            .forEach(card -> cards.put(card.getId(), card));
+        return ids.stream()
+            .map(cards::get)
+            .filter(Objects::nonNull)
+            .toList();
     }
 
     public List<ScreenshotCard> commentedCards(UUID userId, int limit) {

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="030-query-performance-indexes" author="badmshot">
+        <sql>
+            -- Покрывающий индекс для фильтра по игрокам (SELECT match_id по player_id).
+            CREATE INDEX IF NOT EXISTS match_player_player_match_idx ON match_player (player_id, match_id);
+            -- Старый одноколоночный индекс полностью покрывается новым составным.
+            DROP INDEX IF EXISTS match_player_player_idx;
+
+            -- Стабильная сортировка кадров по дате создания (tie-breaker в ТОПе и списках).
+            CREATE INDEX IF NOT EXISTS screenshot_created_idx ON screenshot (created_at DESC);
+        </sql>
+    </changeSet>
+
+    <changeSet id="031-refresh-statistics" author="badmshot">
+        <sql>
+            -- После массового импорта/переиндексации обновляем статистику планировщика.
+            ANALYZE app_user;
+            ANALYZE club;
+            ANALYZE player;
+            ANALYZE archive_session;
+            ANALYZE match;
+            ANALYZE match_player;
+            ANALYZE screenshot;
+            ANALYZE screenshot_like;
+            ANALYZE screenshot_share;
+            ANALYZE screenshot_comment;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

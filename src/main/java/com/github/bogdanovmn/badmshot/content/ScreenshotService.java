@@ -76,8 +76,8 @@ class ScreenshotService {
     }
 
     @Transactional(readOnly = true)
-    List<ScreenshotCard> top(UUID userId) {
-        return screenshotRepository.topCards(userIdOrAnonymous(userId), topFramesLimit);
+    List<ScreenshotCard> top() {
+        return screenshotRepository.topCards(ANONYMOUS_USER, topFramesLimit);
     }
 
     @Transactional(readOnly = true)
