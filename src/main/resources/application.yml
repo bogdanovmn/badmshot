@@ -24,7 +24,7 @@ jwt:
 badmshot:
   archive-dir: ${BADMSHOT_ARCHIVE_DIR:}
   archive:
-    read-only: ${BADMSHOT_ARCHIVE_READ_ONLY:false}
+    files-read-only: ${BADMSHOT_ARCHIVE_FILES_READ_ONLY:false}
   export:
     enabled: ${BADMSHOT_EXPORT_ENABLED:true}
   import:

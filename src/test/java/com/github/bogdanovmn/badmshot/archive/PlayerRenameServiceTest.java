@@ -89,6 +89,40 @@ class PlayerRenameServiceTest {
     }
 
     @Test
+    void renamesOnlyMetadataWhenFilesAreReadOnly() throws Exception {
+        Field filesReadOnlyField = PlayerRenameService.class.getDeclaredField("filesReadOnly");
+        filesReadOnlyField.setAccessible(true);
+        filesReadOnlyField.setBoolean(service, true);
+
+        UUID playerId = UUID.randomUUID();
+        UUID matchId = UUID.randomUUID();
+        String relPath = "games/2024/2024-04/2024-04-17-lesteh/"
+            + "2024-04-17-lesteh--olyaZ-misha-skip-skip--note.mp4";
+        Path source = archiveDir.resolve(relPath);
+        Files.createDirectories(source.getParent());
+        Files.write(source, new byte[0]);
+
+        when(playerRepository.findById(playerId)).thenReturn(Optional.of(
+            Player.builder()
+                .id(playerId)
+                .name("olyaZ")
+                .build()
+        ));
+
+        PlayerRenameResult result = service.rename(playerId, "olyaZ2");
+
+        String expectedRelPath = "games/2024/2024-04/2024-04-17-lesteh/"
+            + "2024-04-17-lesteh--olyaZ2-misha-skip-skip--note.mp4";
+        assertEquals("olyaZ2", result.getName());
+        assertEquals(0, result.getRenamedFiles());
+        assertTrue(result.isFilesReadOnly());
+        assertTrue(Files.exists(source));
+        assertFalse(Files.exists(archiveDir.resolve(expectedRelPath)));
+        verify(matchRepository, never()).updateRelPath(any(), any());
+        verify(playerRepository).updateName(playerId, "olyaZ2");
+    }
+
+    @Test
     void renamesPlayerIntoExistingPlayer() throws Exception {
         UUID playerId = UUID.randomUUID();
         UUID targetPlayerId = UUID.randomUUID();

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -97,6 +98,55 @@ class ArchiveServiceRenameTest {
             + "2024-04-17-lesteh--olyaZ2-misha-skip-skip--note.mp4";
         verify(matchRepository).updateRelPath(matchId, expectedRelPath);
         assertTrue(Files.exists(archiveDir.resolve(expectedRelPath)));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UUID>> playersCaptor = ArgumentCaptor.forClass(List.class);
+        verify(matchRepository).replacePlayers(eq(matchId), playersCaptor.capture());
+        assertEquals(Arrays.asList(olyaNewId, mishaId, null, null), playersCaptor.getValue());
+    }
+
+    @Test
+    void updatesOnlyMetadataWhenFilesAreReadOnly() throws Exception {
+        Field filesReadOnlyField = ArchiveService.class.getDeclaredField("filesReadOnly");
+        filesReadOnlyField.setAccessible(true);
+        filesReadOnlyField.setBoolean(service, true);
+
+        String relPath = "games/2024/2024-04/2024-04-17-lesteh/"
+            + "2024-04-17-lesteh--olyaZ-misha-skip-skip--note.mp4";
+        Path source = archiveDir.resolve(relPath);
+        Files.createDirectories(source.getParent());
+        Files.write(source, new byte[0]);
+
+        UUID matchId = UUID.randomUUID();
+        UUID olyaNewId = UUID.randomUUID();
+        UUID mishaId = UUID.randomUUID();
+
+        when(matchRepository.findById(matchId)).thenReturn(Optional.of(
+            Match.builder()
+                .id(matchId)
+                .type(ArchiveType.GAMES)
+                .relPath(relPath)
+                .build()
+        ));
+        when(playerRepository.upsert(anyString())).thenAnswer(invocation -> Map.of(
+            "olyaZ2", olyaNewId,
+            "misha", mishaId
+        ).get(invocation.getArgument(0, String.class)));
+        when(matchRepository.brief(matchId)).thenReturn(Optional.of(
+            MatchBrief.builder()
+                .id(matchId)
+                .type(ArchiveType.GAMES)
+                .relPath(relPath)
+                .build()
+        ));
+
+        service.rename(matchId, List.of("olyaZ2", "misha"));
+
+        String expectedRelPath = "games/2024/2024-04/2024-04-17-lesteh/"
+            + "2024-04-17-lesteh--olyaZ2-misha-skip-skip--note.mp4";
+        assertTrue(Files.exists(source));
+        assertTrue(Files.notExists(archiveDir.resolve(expectedRelPath)));
+        verify(matchRepository, never()).updateRelPath(eq(matchId), anyString());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<UUID>> playersCaptor = ArgumentCaptor.forClass(List.class);

@@ -35,8 +35,8 @@ public class PlayerRenameService {
     @Value("${badmshot.archive-dir}")
     private String archiveDir;
 
-    @Value("${badmshot.archive.read-only:false}")
-    private boolean readOnly;
+    @Value("${badmshot.archive.files-read-only:false}")
+    private boolean filesReadOnly;
 
     @Transactional(readOnly = true)
     public PlayerRenameInfo info(UUID playerId) {
@@ -63,9 +63,6 @@ public class PlayerRenameService {
 
     @Transactional
     public PlayerRenameResult rename(UUID playerId, String rawName) {
-        if (readOnly) {
-            throw new IllegalStateException("Архив доступен только для чтения");
-        }
         Player player = requirePlayer(playerId);
         if (player.isAlias()) {
             throw new IllegalArgumentException("Игрок является псевдонимом другого игрока");
@@ -76,22 +73,28 @@ public class PlayerRenameService {
         }
         Optional<UUID> targetPlayerId = playerRepository.findIdByName(newName, playerId);
 
-        List<RenameAction> actions = renameActions(playerId, newName);
-        preflight(actions);
-        for (RenameAction action : actions) {
-            move(workspace().resolve(action.relPath()), workspace().resolve(action.newRelPath()));
-            matchRepository.updateRelPath(action.matchId(), action.newRelPath());
+        List<RenameAction> actions = List.of();
+        if (!filesReadOnly) {
+            actions = renameActions(playerId, newName);
+            preflight(actions);
+            for (RenameAction action : actions) {
+                move(workspace().resolve(action.relPath()), workspace().resolve(action.newRelPath()));
+                matchRepository.updateRelPath(action.matchId(), action.newRelPath());
+            }
         }
         if (targetPlayerId.isPresent()) {
             matchRepository.reassignPlayer(playerId, targetPlayerId.get());
             playerRepository.mergeInto(playerId, targetPlayerId.get());
             log.info(
-                "Player {} merged into {} ({} files renamed)",
-                player.getName(), newName, actions.size()
+                "Player {} merged into {} ({} files renamed, files read-only: {})",
+                player.getName(), newName, actions.size(), filesReadOnly
             );
         } else {
             playerRepository.updateName(playerId, newName);
-            log.info("Player {} renamed to {} in {} files", player.getName(), newName, actions.size());
+            log.info(
+                "Player {} renamed to {} in {} files (files read-only: {})",
+                player.getName(), newName, actions.size(), filesReadOnly
+            );
         }
         return result(newName, actions.size());
     }
@@ -197,6 +200,7 @@ public class PlayerRenameService {
         return PlayerRenameResult.builder()
             .name(name)
             .renamedFiles(renamedFiles)
+            .filesReadOnly(filesReadOnly)
             .build();
     }
 

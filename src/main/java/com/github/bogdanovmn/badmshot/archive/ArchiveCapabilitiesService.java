@@ -15,15 +15,15 @@ class ArchiveCapabilitiesService {
     @Value("${badmshot.index.enabled:true}")
     private boolean indexEnabled;
 
-    @Value("${badmshot.archive.read-only:false}")
-    private boolean readOnly;
+    @Value("${badmshot.archive.files-read-only:false}")
+    private boolean filesReadOnly;
 
     ArchiveCapabilities capabilities() {
         return ArchiveCapabilities.builder()
             .exportEnabled(exportEnabled)
             .importEnabled(importEnabled)
             .indexEnabled(indexEnabled)
-            .readOnly(readOnly)
+            .filesReadOnly(filesReadOnly)
             .build();
     }
 }

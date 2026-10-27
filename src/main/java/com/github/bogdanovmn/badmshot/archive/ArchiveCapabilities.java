@@ -9,5 +9,5 @@ class ArchiveCapabilities {
     boolean exportEnabled;
     boolean importEnabled;
     boolean indexEnabled;
-    boolean readOnly;
+    boolean filesReadOnly;
 }

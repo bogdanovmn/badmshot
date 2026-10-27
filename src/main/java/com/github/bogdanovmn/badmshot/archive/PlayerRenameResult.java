@@ -8,4 +8,5 @@ import lombok.Value;
 public class PlayerRenameResult {
     String name;
     int renamedFiles;
+    boolean filesReadOnly;
 }

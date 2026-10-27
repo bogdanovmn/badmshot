@@ -13,7 +13,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - OUTPUT=file
       - BADMSHOT_ARCHIVE_DIR=/archive
-      - BADMSHOT_ARCHIVE_READ_ONLY=true
+      - BADMSHOT_ARCHIVE_FILES_READ_ONLY=true
       - BADMSHOT_INDEX_ENABLED=false
       - BADMSHOT_EXPORT_ENABLED=false
       - BADMSHOT_IMPORT_ENABLED=true

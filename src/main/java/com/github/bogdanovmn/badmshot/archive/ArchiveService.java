@@ -32,8 +32,8 @@ class ArchiveService {
     @Value("${badmshot.archive-dir}")
     private String archiveDir;
 
-    @Value("${badmshot.archive.read-only:false}")
-    private boolean readOnly;
+    @Value("${badmshot.archive.files-read-only:false}")
+    private boolean filesReadOnly;
 
     @Transactional(readOnly = true)
     List<ArchiveYear> tree(ArchiveType type, UUID playerId) {
@@ -83,9 +83,6 @@ class ArchiveService {
 
     @Transactional
     MatchBrief rename(UUID matchId, List<String> players) {
-        if (readOnly) {
-            throw new IllegalStateException("Архив доступен только для чтения");
-        }
         Match match = matchRepository.findById(matchId)
             .orElseThrow(() -> new NoSuchElementException("Матч не найден: " + matchId));
         if (!match.isValid()) {
@@ -99,24 +96,28 @@ class ArchiveService {
         validatePlayers(merged, match.getType());
 
         String relPath = match.getRelPath();
-        String newRelPath = ArchivePathBuilder.buildRelPath(
-            relPath, merged, parsed.getComment(), match.getType()
-        );
-        if (newRelPath.equals(relPath)) {
+        if (!filesReadOnly) {
+            String newRelPath = ArchivePathBuilder.buildRelPath(
+                relPath, merged, parsed.getComment(), match.getType()
+            );
+            if (newRelPath.equals(relPath)) {
+                return matchRepository.brief(matchId).orElseThrow();
+            }
+
+            Path source = workspace().resolve(relPath);
+            Path target = workspace().resolve(newRelPath);
+            if (Files.exists(target)) {
+                throw new IllegalArgumentException("Файл уже существует: " + newRelPath);
+            }
+            if (matchRepository.existsByRelPath(newRelPath)) {
+                throw new IllegalArgumentException("Файл уже проиндексирован: " + newRelPath);
+            }
+            move(source, target);
+
+            matchRepository.updateRelPath(matchId, newRelPath);
+        } else if (merged.equals(parsed.getPlayers())) {
             return matchRepository.brief(matchId).orElseThrow();
         }
-
-        Path source = workspace().resolve(relPath);
-        Path target = workspace().resolve(newRelPath);
-        if (Files.exists(target)) {
-            throw new IllegalArgumentException("Файл уже существует: " + newRelPath);
-        }
-        if (matchRepository.existsByRelPath(newRelPath)) {
-            throw new IllegalArgumentException("Файл уже проиндексирован: " + newRelPath);
-        }
-        move(source, target);
-
-        matchRepository.updateRelPath(matchId, newRelPath);
         List<UUID> playerIds = merged.stream()
             .map(name -> ArchivePathParser.isSkip(name) ? null : playerRepository.upsert(name))
             .collect(Collectors.toList());
