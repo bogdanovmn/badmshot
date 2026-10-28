@@ -46,6 +46,11 @@ class FilterController {
         return playerRepository.letters();
     }
 
+    @GetMapping("/players/no-games")
+    List<Player> playersWithoutMatches() {
+        return playerRepository.withoutMatches();
+    }
+
     @GetMapping("/clubs/by-ids")
     List<Club> clubsByIds(@RequestParam(name = "ids", required = false) List<UUID> ids) {
         return ids == null ? List.of() : clubRepository.byIds(ids);

@@ -183,20 +183,55 @@ public class PlayerRepository {
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
-                  AND upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) = upper(:letter)
-                ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
+                  AND upper(left(p.name, 1)) = upper(:letter)
+                  AND EXISTS (
+                      SELECT 1
+                      FROM match_player mp
+                      WHERE mp.player_id = p.id
+                         OR mp.player_id IN (
+                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
+                         )
+                  )
+                ORDER BY lower(p.name)
                 """,
             Map.of("letter", letter),
             PLAYER_ROW_MAPPER
         );
     }
 
+    public List<Player> withoutMatches() {
+        return jdbc.query(PLAYER_SELECT + """
+                WHERE p.alias_of_player_id IS NULL
+                  AND lower(p.name) <> 'skip'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM match_player mp
+                      WHERE mp.player_id = p.id
+                         OR mp.player_id IN (
+                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
+                         )
+                  )
+                ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
+                """,
+            Map.of(),
+            PLAYER_ROW_MAPPER
+        );
+    }
+
     public List<String> letters() {
         return jdbc.queryForList("""
-                SELECT DISTINCT upper(left(coalesce(nullif(p.display_name, ''), p.name), 1)) AS letter
+                SELECT DISTINCT upper(left(p.name, 1)) AS letter
                 FROM player p
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM match_player mp
+                      WHERE mp.player_id = p.id
+                         OR mp.player_id IN (
+                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
+                         )
+                  )
                 ORDER BY letter
                 """,
             Map.of(),
@@ -215,7 +250,7 @@ public class PlayerRepository {
         );
     }
 
-    public List<CatalogTag> tags(ArchiveType type) {
+    public List<CatalogTag> tags(ArchiveType type, boolean withDisplayNameOnly) {
         return jdbc.query("""
                 SELECT p.id,
                        coalesce(nullif(p.display_name, ''), p.name) AS label,
@@ -229,11 +264,13 @@ public class PlayerRepository {
                 ) t
                 JOIN player p ON p.id = t.root_id
                 WHERE lower(p.name) <> 'skip'
+                  AND (NOT :withDisplayNameOnly OR nullif(p.display_name, '') IS NOT NULL)
                 GROUP BY p.id, p.name, p.display_name
-                HAVING count(*) > 2
                 ORDER BY label
                 """,
-            Map.of("type", type.name()),
+            new MapSqlParameterSource()
+                .addValue("type", type.name())
+                .addValue("withDisplayNameOnly", withDisplayNameOnly),
             (rs, rowNum) -> CatalogTag.builder()
                 .id(UUID.fromString(rs.getString("id")))
                 .label(rs.getString("label"))

@@ -18,8 +18,11 @@ class TagController {
     private final PlayerRepository playerRepository;
 
     @GetMapping("/players")
-    List<CatalogTag> players(@RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type) {
-        return playerRepository.tags(type);
+    List<CatalogTag> players(
+        @RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type,
+        @RequestParam(name = "withDisplayName", defaultValue = "false") boolean withDisplayName
+    ) {
+        return playerRepository.tags(type, withDisplayName);
     }
 
     @GetMapping("/clubs")
