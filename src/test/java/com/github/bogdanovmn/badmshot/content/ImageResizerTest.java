@@ -7,16 +7,14 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ImageResizerTest {
 
-    private final ImageResizer resizer = new ImageResizer(1920, "jpeg", 0.78f);
+    private final ImageResizer resizer = new ImageResizer(1920, 0.78f);
 
     @Test
     void returnsSourceWhenWidthNotLarger() {
@@ -47,8 +45,8 @@ class ImageResizerTest {
     }
 
     @Test
-    void scalesWebpSourceToJpegThumbnail() throws IOException {
-        ScreenshotImage source = webpImage(200, 100);
+    void scalesLargeJpegUsingSubsampledDecode() throws IOException {
+        ScreenshotImage source = image(600, 300, "jpeg");
         ScreenshotImage result = resizer.crop(source, 100);
 
         assertEquals("jpeg", result.getFormat());
@@ -58,42 +56,33 @@ class ImageResizerTest {
     }
 
     @Test
-    void producesPngWhenConfigured() throws IOException {
-        ImageResizer pngResizer = new ImageResizer(1920, "png", 0.78f);
-        ScreenshotImage source = image(200, 100, "jpeg");
-        ScreenshotImage result = pngResizer.crop(source, 100);
+    void returnsSourceForOriginalOrLargerWidth() {
+        ScreenshotImage source = image(200, 100, "png");
+        assertSame(source, resizer.crop(source, 500));
+    }
 
-        assertEquals("png", result.getFormat());
-        assertEquals(100, result.getWidth());
-        assertEquals(50, result.getHeight());
-        assertNotNull(ImageIO.read(new ByteArrayInputStream(result.getData())));
+    @Test
+    void returnsSourceForOriginalWidthEvenAboveMaxWidth() {
+        ImageResizer limited = new ImageResizer(100, 0.78f);
+        ScreenshotImage source = image(400, 200, "png");
+        assertSame(source, limited.crop(source, 400));
     }
 
     @Test
     void clampsToMaxWidth() {
-        ImageResizer limited = new ImageResizer(100, "jpeg", 0.78f);
+        ImageResizer limited = new ImageResizer(100, 0.78f);
         ScreenshotImage source = image(400, 200, "png");
-        ScreenshotImage result = limited.crop(source, 1000);
+        ScreenshotImage result = limited.crop(source, 200);
 
         assertEquals(100, result.getWidth());
         assertEquals(50, result.getHeight());
     }
 
     @Test
-    void rejectsUnsupportedOutputFormat() {
-        assertThrows(IllegalArgumentException.class, () -> new ImageResizer(1920, "webp", 0.78f));
-    }
-
-    private ScreenshotImage webpImage(int width, int height) throws IOException {
-        try (InputStream input = getClass().getResourceAsStream("/images/sample.webp")) {
-            assertNotNull(input);
-            return ScreenshotImage.builder()
-                .data(input.readAllBytes())
-                .format("webp")
-                .width(width)
-                .height(height)
-                .build();
-        }
+    void normalizesRequestedWidth() {
+        assertEquals(1, resizer.targetWidth(0));
+        assertEquals(1920, resizer.targetWidth(1920));
+        assertEquals(1920, resizer.targetWidth(5000));
     }
 
     private ScreenshotImage image(int width, int height, String format) {

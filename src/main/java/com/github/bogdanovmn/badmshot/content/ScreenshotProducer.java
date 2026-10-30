@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 @Slf4j
 public class ScreenshotProducer {
 
-    private static final List<String> IMAGE_EXTENSIONS = List.of("jpg", "jpeg", "png", "webp", "avif");
+    private static final List<String> IMAGE_EXTENSIONS = List.of("jpg", "jpeg", "png", "avif");
 
     private final ScreenshotRepository screenshotRepository;
 

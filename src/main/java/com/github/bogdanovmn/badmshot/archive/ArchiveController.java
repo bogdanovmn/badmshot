@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.archive;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,8 +31,10 @@ class ArchiveController {
     private final ArchiveCapabilitiesService capabilitiesService;
 
     @GetMapping("/capabilities")
-    ArchiveCapabilities capabilities() {
-        return capabilitiesService.capabilities();
+    ResponseEntity<ArchiveCapabilities> capabilities() {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePublic())
+            .body(capabilitiesService.capabilities());
     }
 
     @GetMapping("/sessions")

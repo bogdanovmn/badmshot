@@ -44,7 +44,6 @@ badmshot:
     player: ${BADMSHOT_INDEX_PLAYER:ffmpeg}
   image:
     max-width: 3840
-    thumbnail-format: jpeg
     thumbnail-quality: 0.78
   job:
     stale-timeout-seconds: 60

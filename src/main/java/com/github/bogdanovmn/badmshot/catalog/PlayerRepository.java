@@ -1,5 +1,7 @@
 package com.github.bogdanovmn.badmshot.catalog;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.bogdanovmn.badmshot.archive.ArchiveType;
 import com.github.bogdanovmn.badmshot.common.FullTextQuery;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +10,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +46,13 @@ public class PlayerRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
+    private final Cache<String, List<String>> lettersCache = Caffeine.newBuilder()
+        .expireAfterWrite(Duration.ofMinutes(1))
+        .maximumSize(1)
+        .build();
+
     public UUID upsert(String name) {
-        return jdbc.queryForObject("""
+        UUID id = jdbc.queryForObject("""
                 INSERT INTO player (name)
                 VALUES (:name)
                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
@@ -53,6 +61,8 @@ public class PlayerRepository {
             Map.of("name", name),
             UUID.class
         );
+        invalidateLetters();
+        return id;
     }
 
     public Optional<Player> findById(UUID playerId) {
@@ -126,12 +136,7 @@ public class PlayerRepository {
             termConditions.add("""
                 (
                    p.search_vector @@ to_tsquery('simple', :tsq)
-                   OR EXISTS (
-                       SELECT 1
-                       FROM player ax
-                       WHERE ax.alias_of_player_id = p.id
-                         AND ax.search_vector @@ to_tsquery('simple', :tsq)
-                   )
+                   OR a.search_vector @@ to_tsquery('simple', :tsq)
                 )
                 """);
             params.addValue("tsq", preparedTerm);
@@ -161,13 +166,20 @@ public class PlayerRepository {
                 """);
             params.addValue("clubId", clubId);
         }
-        sql.append("""
-             ORDER BY LEAST(
-                 LOWER(coalesce(nullif(p.display_name, ''), p.name)) <-> LOWER(:term),
-                 LOWER(coalesce(nullif(a.display_name, ''), a.name, '')) <-> LOWER(:term)
-             ), coalesce(nullif(p.display_name, ''), p.name)
-             LIMIT :limit
-            """);
+        if (searchTerm.isEmpty()) {
+            sql.append("""
+                 ORDER BY coalesce(nullif(p.display_name, ''), p.name)
+                 LIMIT :limit
+                """);
+        } else {
+            sql.append("""
+                 ORDER BY LEAST(
+                     LOWER(coalesce(nullif(p.display_name, ''), p.name)) <-> LOWER(:term),
+                     LOWER(coalesce(nullif(a.display_name, ''), a.name, '')) <-> LOWER(:term)
+                 ), coalesce(nullif(p.display_name, ''), p.name)
+                 LIMIT :limit
+                """);
+        }
         return jdbc.query(sql.toString(), params, PLAYER_ROW_MAPPER);
     }
 
@@ -184,13 +196,10 @@ public class PlayerRepository {
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
                   AND upper(left(p.name, 1)) = upper(:letter)
-                  AND EXISTS (
-                      SELECT 1
+                  AND p.id IN (
+                      SELECT coalesce(pp.alias_of_player_id, pp.id)
                       FROM match_player mp
-                      WHERE mp.player_id = p.id
-                         OR mp.player_id IN (
-                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
-                         )
+                      JOIN player pp ON pp.id = mp.player_id
                   )
                 ORDER BY lower(p.name)
                 """,
@@ -203,13 +212,10 @@ public class PlayerRepository {
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
-                  AND NOT EXISTS (
-                      SELECT 1
+                  AND p.id NOT IN (
+                      SELECT coalesce(pp.alias_of_player_id, pp.id)
                       FROM match_player mp
-                      WHERE mp.player_id = p.id
-                         OR mp.player_id IN (
-                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
-                         )
+                      JOIN player pp ON pp.id = mp.player_id
                   )
                 ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
                 """,
@@ -219,24 +225,25 @@ public class PlayerRepository {
     }
 
     public List<String> letters() {
-        return jdbc.queryForList("""
+        return lettersCache.get("letters", key -> jdbc.queryForList("""
                 SELECT DISTINCT upper(left(p.name, 1)) AS letter
                 FROM player p
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
-                  AND EXISTS (
-                      SELECT 1
+                  AND p.id IN (
+                      SELECT coalesce(pp.alias_of_player_id, pp.id)
                       FROM match_player mp
-                      WHERE mp.player_id = p.id
-                         OR mp.player_id IN (
-                             SELECT ap.id FROM player ap WHERE ap.alias_of_player_id = p.id
-                         )
+                      JOIN player pp ON pp.id = mp.player_id
                   )
                 ORDER BY letter
                 """,
             Map.of(),
             String.class
-        );
+        ));
+    }
+
+    private void invalidateLetters() {
+        lettersCache.invalidateAll();
     }
 
     public List<Player> byMatch(UUID matchId) {
@@ -289,6 +296,7 @@ public class PlayerRepository {
                 .addValue("playerId", playerId)
                 .addValue("displayName", displayName)
         );
+        invalidateLetters();
     }
 
     public Optional<UUID> findIdByName(String name, UUID excludePlayerId) {
@@ -314,6 +322,7 @@ public class PlayerRepository {
                 .addValue("playerId", playerId)
                 .addValue("name", name)
         );
+        invalidateLetters();
     }
 
     public void mergeInto(UUID playerId, UUID targetPlayerId) {
@@ -337,6 +346,7 @@ public class PlayerRepository {
                 """,
             Map.of("playerId", playerId)
         );
+        invalidateLetters();
     }
 
     public void clearAlias(UUID playerId) {
@@ -347,6 +357,7 @@ public class PlayerRepository {
                 """,
             Map.of("playerId", playerId)
         );
+        invalidateLetters();
     }
 
     public void setAlias(UUID playerId, UUID aliasPlayerId) {
@@ -357,5 +368,6 @@ public class PlayerRepository {
                 """,
             Map.of("playerId", playerId, "aliasPlayerId", aliasPlayerId)
         );
+        invalidateLetters();
     }
 }

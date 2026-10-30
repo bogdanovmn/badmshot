@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="040-player-filter-indexes" author="badmshot">
+        <sql>
+            -- Player letters and "players by letter" lookups.
+            CREATE INDEX IF NOT EXISTS player_letter_name_idx
+                ON player (upper(left(name, 1)), lower(name))
+                WHERE alias_of_player_id IS NULL AND lower(name) != 'skip';
+
+            -- Default player list ordering (no search term).
+            CREATE INDEX IF NOT EXISTS player_display_label_idx
+                ON player (lower(coalesce(nullif(display_name, ''), name)))
+                WHERE alias_of_player_id IS NULL;
+
+            ANALYZE player;
+            ANALYZE match_player;
+        </sql>
+        <rollback>
+            DROP INDEX IF EXISTS player_display_label_idx;
+            DROP INDEX IF EXISTS player_letter_name_idx;
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

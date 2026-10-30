@@ -6,24 +6,23 @@ import org.springframework.stereotype.Service;
 @Service
 class ArchiveCapabilitiesService {
 
-    @Value("${badmshot.export.enabled:true}")
-    private boolean exportEnabled;
+    private final ArchiveCapabilities capabilities;
 
-    @Value("${badmshot.import.enabled:true}")
-    private boolean importEnabled;
-
-    @Value("${badmshot.index.enabled:true}")
-    private boolean indexEnabled;
-
-    @Value("${badmshot.archive.files-read-only:false}")
-    private boolean filesReadOnly;
-
-    ArchiveCapabilities capabilities() {
-        return ArchiveCapabilities.builder()
+    ArchiveCapabilitiesService(
+        @Value("${badmshot.export.enabled:true}") boolean exportEnabled,
+        @Value("${badmshot.import.enabled:true}") boolean importEnabled,
+        @Value("${badmshot.index.enabled:true}") boolean indexEnabled,
+        @Value("${badmshot.archive.files-read-only:false}") boolean filesReadOnly
+    ) {
+        this.capabilities = ArchiveCapabilities.builder()
             .exportEnabled(exportEnabled)
             .importEnabled(importEnabled)
             .indexEnabled(indexEnabled)
             .filesReadOnly(filesReadOnly)
             .build();
+    }
+
+    ArchiveCapabilities capabilities() {
+        return capabilities;
     }
 }

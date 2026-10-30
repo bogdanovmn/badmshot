@@ -27,7 +27,7 @@ class ArchiveImportReader {
     private static final int MAX_MANIFEST_BYTES = 1024 * 1024;
     private static final int MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
     private static final int FORMAT_VERSION = 1;
-    private static final Set<String> ALLOWED_FORMATS = Set.of("jpeg", "jpg", "png", "webp", "avif");
+    private static final Set<String> ALLOWED_FORMATS = Set.of("jpeg", "jpg", "png", "avif");
 
     private final ObjectMapper objectMapper;
     private final ArchivePathParser pathParser;

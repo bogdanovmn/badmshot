@@ -18,7 +18,7 @@ import java.util.Set;
 class ArchiveIndexService {
 
     private static final Set<ScreenshotCommand.OutputFormat> ALLOWED_FORMATS =
-        EnumSet.of(ScreenshotCommand.OutputFormat.jpeg, ScreenshotCommand.OutputFormat.webp);
+        EnumSet.of(ScreenshotCommand.OutputFormat.jpeg);
 
     private final JobService jobService;
     private final ArchiveIndexTask task;

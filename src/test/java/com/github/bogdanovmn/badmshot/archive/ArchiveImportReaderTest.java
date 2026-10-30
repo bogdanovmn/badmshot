@@ -45,7 +45,7 @@ class ArchiveImportReaderTest {
     @Test
     void readsIndiArchive() throws IOException {
         UUID screenshotId = UUID.randomUUID();
-        Path archive = archive(indiManifest(screenshotId), Map.of(screenshotId + ".webp", new byte[]{4, 5}));
+        Path archive = archive(indiManifest(screenshotId), Map.of(screenshotId + ".jpeg", new byte[]{4, 5}));
 
         LoadedArchive loaded = reader.read(archive);
 
@@ -108,7 +108,7 @@ class ArchiveImportReaderTest {
         SessionManifestScreenshot screenshot = SessionManifestScreenshot.builder()
             .id(screenshotId)
             .timecodeSeconds(15)
-            .format("webp")
+            .format("jpeg")
             .width(320)
             .height(180)
             .build();

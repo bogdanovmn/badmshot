@@ -4,6 +4,7 @@ import com.github.bogdanovmn.badmshot.infrastructure.security.common.FileResourc
 import com.github.bogdanovmn.badmshot.infrastructure.security.common.RSAKey;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,19 +16,19 @@ import java.security.PublicKey;
 @Component
 @Slf4j
 class JwtInstance {
-	private final PublicKey publicKey;
+	private final JwtParser parser;
 
 	public JwtInstance(@Value("${jwt.public-key-path:}") String publicKeyPath) throws IOException {
 		log.info("JWT public key loading: {}", publicKeyPath);
-		publicKey = RSAKey.ofDER(
+		PublicKey publicKey = RSAKey.ofDER(
 			new FileResource(publicKeyPath).content()
 		).asPublicKey();
+		this.parser = Jwts.parserBuilder()
+			.setSigningKey(publicKey)
+			.build();
 	}
 
 	public Jws<Claims> checkSignatureAndReturnClaims(String token) {
-		return Jwts.parserBuilder()
-			.setSigningKey(publicKey)
-			.build()
-			.parseClaimsJws(token);
+		return parser.parseClaimsJws(token);
 	}
 }

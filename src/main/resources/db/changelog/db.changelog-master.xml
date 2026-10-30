@@ -9,5 +9,6 @@
     <include file="db/changelog/010-archive-path-rules.xml"/>
     <include file="db/changelog/020-comments-shares-profile.xml"/>
     <include file="db/changelog/030-query-performance.xml"/>
+    <include file="db/changelog/040-player-filter-indexes.xml"/>
 
 </databaseChangeLog>
