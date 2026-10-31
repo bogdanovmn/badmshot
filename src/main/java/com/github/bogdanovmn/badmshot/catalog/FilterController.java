@@ -33,22 +33,27 @@ class FilterController {
     List<Player> players(
         @RequestParam(name = "clubId", required = false) UUID clubId,
         @RequestParam(name = "term", required = false) String term,
-        @RequestParam(name = "letter", required = false) String letter
+        @RequestParam(name = "letter", required = false) String letter,
+        @RequestParam(name = "unprocessed", defaultValue = "false") boolean unprocessed
     ) {
         if (letter != null && !letter.isBlank()) {
-            return playerRepository.byLetter(letter);
+            return playerRepository.byLetter(letter, unprocessed);
         }
         return playerRepository.search(term, clubId, limit);
     }
 
     @GetMapping("/players/letters")
-    List<String> playerLetters() {
-        return playerRepository.letters();
+    List<PlayerLetterCount> playerLetters(
+        @RequestParam(name = "unprocessed", defaultValue = "false") boolean unprocessed
+    ) {
+        return playerRepository.letters(unprocessed);
     }
 
     @GetMapping("/players/no-games")
-    List<Player> playersWithoutMatches() {
-        return playerRepository.withoutMatches();
+    List<Player> playersWithoutMatches(
+        @RequestParam(name = "unprocessed", defaultValue = "false") boolean unprocessed
+    ) {
+        return playerRepository.withoutMatches(unprocessed);
     }
 
     @GetMapping("/clubs/by-ids")

@@ -44,11 +44,18 @@ public class PlayerRepository {
         LEFT JOIN player a ON a.alias_of_player_id = p.id
         """;
 
+    private static final String UNPROCESSED_CONDITION = """
+          AND (NOT :unprocessed OR (
+              nullif(p.display_name, '') IS NULL
+              AND p.alias_of_player_id IS NULL
+          ))
+        """;
+
     private final NamedParameterJdbcTemplate jdbc;
 
-    private final Cache<String, List<String>> lettersCache = Caffeine.newBuilder()
+    private final Cache<String, List<PlayerLetterCount>> lettersCache = Caffeine.newBuilder()
         .expireAfterWrite(Duration.ofMinutes(1))
-        .maximumSize(1)
+        .maximumSize(2)
         .build();
 
     public UUID upsert(String name) {
@@ -191,7 +198,7 @@ public class PlayerRepository {
         return 0.85;
     }
 
-    public List<Player> byLetter(String letter) {
+    public List<Player> byLetter(String letter, boolean unprocessedOnly) {
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
@@ -201,14 +208,17 @@ public class PlayerRepository {
                       FROM match_player mp
                       JOIN player pp ON pp.id = mp.player_id
                   )
+                """ + UNPROCESSED_CONDITION + """
                 ORDER BY lower(p.name)
                 """,
-            Map.of("letter", letter),
+            new MapSqlParameterSource()
+                .addValue("letter", letter)
+                .addValue("unprocessed", unprocessedOnly),
             PLAYER_ROW_MAPPER
         );
     }
 
-    public List<Player> withoutMatches() {
+    public List<Player> withoutMatches(boolean unprocessedOnly) {
         return jdbc.query(PLAYER_SELECT + """
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
@@ -217,16 +227,18 @@ public class PlayerRepository {
                       FROM match_player mp
                       JOIN player pp ON pp.id = mp.player_id
                   )
+                """ + UNPROCESSED_CONDITION + """
                 ORDER BY lower(coalesce(nullif(p.display_name, ''), p.name))
                 """,
-            Map.of(),
+            new MapSqlParameterSource()
+                .addValue("unprocessed", unprocessedOnly),
             PLAYER_ROW_MAPPER
         );
     }
 
-    public List<String> letters() {
-        return lettersCache.get("letters", key -> jdbc.queryForList("""
-                SELECT DISTINCT upper(left(p.name, 1)) AS letter
+    public List<PlayerLetterCount> letters(boolean unprocessedOnly) {
+        return lettersCache.get("letters:" + unprocessedOnly, key -> jdbc.query("""
+                SELECT upper(left(p.name, 1)) AS letter, count(*) AS players
                 FROM player p
                 WHERE p.alias_of_player_id IS NULL
                   AND lower(p.name) <> 'skip'
@@ -235,10 +247,16 @@ public class PlayerRepository {
                       FROM match_player mp
                       JOIN player pp ON pp.id = mp.player_id
                   )
+                """ + UNPROCESSED_CONDITION + """
+                GROUP BY letter
                 ORDER BY letter
                 """,
-            Map.of(),
-            String.class
+            new MapSqlParameterSource()
+                .addValue("unprocessed", unprocessedOnly),
+            (rs, rowNum) -> new PlayerLetterCount(
+                rs.getString("letter"),
+                rs.getLong("players")
+            )
         ));
     }
 
