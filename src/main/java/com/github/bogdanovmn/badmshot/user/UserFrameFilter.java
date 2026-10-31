@@ -13,6 +13,7 @@ class UserFrameFilter {
     List<UUID> playerIds;
     List<UUID> clubIds;
     boolean includeIndi;
+    boolean together;
     Instant updatedAt;
 
     static UserFrameFilter empty() {
@@ -20,6 +21,7 @@ class UserFrameFilter {
             .playerIds(List.of())
             .clubIds(List.of())
             .includeIndi(false)
+            .together(false)
             .build();
     }
 

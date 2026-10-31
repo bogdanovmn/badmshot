@@ -71,6 +71,58 @@ public class ClubRepository {
         );
     }
 
+    /**
+     * Клубы, в которых есть игры с кадрами для выбранных игроков.
+     * При {@code together=true} нужен матч, где присутствуют все игроки сразу,
+     * иначе достаточно любого из них.
+     */
+    public List<Club> eligibleForFrames(List<UUID> playerIds, boolean together) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("gamesType", ArchiveType.GAMES.name());
+        StringBuilder sql = new StringBuilder("""
+            SELECT c.id, c.name, c.display_name
+            FROM club c
+            WHERE EXISTS (
+                SELECT 1
+                FROM archive_session sess
+                JOIN match m ON m.session_id = sess.id
+                WHERE sess.club_id = c.id
+                  AND m.type = :gamesType
+                  AND EXISTS (SELECT 1 FROM screenshot sc WHERE sc.match_id = m.id)
+            """);
+        if (playerIds != null && !playerIds.isEmpty()) {
+            if (together) {
+                sql.append("""
+                      AND m.id IN (
+                          SELECT mp.match_id
+                          FROM match_player mp
+                          JOIN player p ON p.id = mp.player_id
+                          WHERE coalesce(p.alias_of_player_id, p.id) IN (:playerIds)
+                          GROUP BY mp.match_id
+                          HAVING count(DISTINCT coalesce(p.alias_of_player_id, p.id)) = :playerIdsCount
+                      )
+                    """);
+                params.addValue("playerIdsCount", playerIds.size());
+            } else {
+                sql.append("""
+                      AND EXISTS (
+                          SELECT 1
+                          FROM match_player mp
+                          JOIN player p ON p.id = mp.player_id
+                          WHERE mp.match_id = m.id
+                            AND coalesce(p.alias_of_player_id, p.id) IN (:playerIds)
+                      )
+                    """);
+            }
+            params.addValue("playerIds", playerIds);
+        }
+        sql.append("""
+            )
+            ORDER BY coalesce(c.display_name, c.name)
+            """);
+        return jdbc.query(sql.toString(), params, CLUB_ROW_MAPPER);
+    }
+
     public List<Club> listAll() {
         return jdbc.query("""
                 SELECT id, name, display_name

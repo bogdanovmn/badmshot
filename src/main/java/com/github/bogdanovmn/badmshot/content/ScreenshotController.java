@@ -132,12 +132,13 @@ class ScreenshotController {
         @CurrentUserId UUID userId,
         @RequestParam(name = "players", required = false) List<UUID> players,
         @RequestParam(name = "clubs", required = false) List<UUID> clubs,
-        @RequestParam(name = "indi", defaultValue = "false") boolean includeIndi
+        @RequestParam(name = "indi", defaultValue = "false") boolean includeIndi,
+        @RequestParam(name = "together", defaultValue = "false") boolean together
     ) {
         if (!frameRateLimit.allow(userId)) {
             throw new TooManyRequestsException("Слишком часто. Подождите немного и попробуйте ещё раз.");
         }
-        return screenshotService.next(filter(players, clubs, includeIndi), userId);
+        return screenshotService.next(filter(players, clubs, includeIndi, together), userId);
     }
 
     @PostMapping("/{id}/view")
@@ -165,11 +166,17 @@ class ScreenshotController {
         screenshotService.unlike(id, userId);
     }
 
-    private ScreenshotFilter filter(List<UUID> players, List<UUID> clubs, boolean includeIndi) {
+    private ScreenshotFilter filter(
+        List<UUID> players,
+        List<UUID> clubs,
+        boolean includeIndi,
+        boolean together
+    ) {
         return ScreenshotFilter.builder()
             .players(players == null ? List.of() : players)
             .clubs(clubs == null ? List.of() : clubs)
             .includeIndi(includeIndi)
+            .together(together)
             .build();
     }
 

@@ -514,18 +514,29 @@ public class ScreenshotRepository {
             params.addValue("clubs", clubs);
         }
         if (!players.isEmpty()) {
-            sql.append("""
-                 AND m.id IN (
-                    SELECT mp2.match_id
-                    FROM match_player mp2
-                    JOIN player p2 ON p2.id = mp2.player_id
-                    WHERE coalesce(p2.alias_of_player_id, p2.id) IN (:players)
-                    GROUP BY mp2.match_id
-                    HAVING count(DISTINCT coalesce(p2.alias_of_player_id, p2.id)) = :playersCount
-                 )
-                """);
+            if (filter.isTogether()) {
+                sql.append("""
+                     AND m.id IN (
+                        SELECT mp2.match_id
+                        FROM match_player mp2
+                        JOIN player p2 ON p2.id = mp2.player_id
+                        WHERE coalesce(p2.alias_of_player_id, p2.id) IN (:players)
+                        GROUP BY mp2.match_id
+                        HAVING count(DISTINCT coalesce(p2.alias_of_player_id, p2.id)) = :playersCount
+                     )
+                    """);
+                params.addValue("playersCount", players.size());
+            } else {
+                sql.append("""
+                     AND m.id IN (
+                        SELECT mp2.match_id
+                        FROM match_player mp2
+                        JOIN player p2 ON p2.id = mp2.player_id
+                        WHERE coalesce(p2.alias_of_player_id, p2.id) IN (:players)
+                     )
+                    """);
+            }
             params.addValue("players", players);
-            params.addValue("playersCount", players.size());
         }
     }
 

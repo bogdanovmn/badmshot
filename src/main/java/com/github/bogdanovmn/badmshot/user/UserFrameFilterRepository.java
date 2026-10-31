@@ -25,7 +25,7 @@ class UserFrameFilterRepository {
 
     Optional<UserFrameFilter> find(UUID userId) {
         return jdbc.query("""
-                SELECT player_ids::text, club_ids::text, include_indi, updated_at
+                SELECT player_ids::text, club_ids::text, include_indi, players_together, updated_at
                 FROM user_frame_filter
                 WHERE user_id = :userId
                 """,
@@ -34,19 +34,31 @@ class UserFrameFilterRepository {
                 .playerIds(readIds(rs.getString("player_ids")))
                 .clubIds(readIds(rs.getString("club_ids")))
                 .includeIndi(rs.getBoolean("include_indi"))
+                .together(rs.getBoolean("players_together"))
                 .updatedAt(rs.getTimestamp("updated_at").toInstant())
                 .build()
         ).stream().findFirst();
     }
 
-    void save(UUID userId, List<UUID> playerIds, List<UUID> clubIds, boolean includeIndi) {
+    void save(
+        UUID userId,
+        List<UUID> playerIds,
+        List<UUID> clubIds,
+        boolean includeIndi,
+        boolean together
+    ) {
         jdbc.update("""
-                INSERT INTO user_frame_filter (user_id, player_ids, club_ids, include_indi, updated_at)
-                VALUES (:userId, :playerIds::jsonb, :clubIds::jsonb, :includeIndi, now())
+                INSERT INTO user_frame_filter (
+                    user_id, player_ids, club_ids, include_indi, players_together, updated_at
+                )
+                VALUES (
+                    :userId, :playerIds::jsonb, :clubIds::jsonb, :includeIndi, :together, now()
+                )
                 ON CONFLICT (user_id) DO UPDATE
                 SET player_ids = EXCLUDED.player_ids,
                     club_ids = EXCLUDED.club_ids,
                     include_indi = EXCLUDED.include_indi,
+                    players_together = EXCLUDED.players_together,
                     updated_at = now()
                 """,
             new MapSqlParameterSource()
@@ -54,6 +66,7 @@ class UserFrameFilterRepository {
                 .addValue("playerIds", writeIds(playerIds))
                 .addValue("clubIds", writeIds(clubIds))
                 .addValue("includeIndi", includeIndi)
+                .addValue("together", together)
         );
     }
 

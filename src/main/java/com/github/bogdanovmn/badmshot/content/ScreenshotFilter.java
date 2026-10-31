@@ -12,12 +12,18 @@ class ScreenshotFilter {
     List<UUID> players;
     List<UUID> clubs;
     boolean includeIndi;
+    /**
+     * true — кадр должен содержать всех выбранных игроков,
+     * false — достаточно любого из выбранных игроков.
+     */
+    boolean together;
 
     public static ScreenshotFilter empty() {
         return ScreenshotFilter.builder()
             .players(List.of())
             .clubs(List.of())
             .includeIndi(false)
+            .together(false)
             .build();
     }
 

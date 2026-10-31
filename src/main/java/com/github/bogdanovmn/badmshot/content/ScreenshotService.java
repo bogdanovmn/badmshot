@@ -1,6 +1,7 @@
 package com.github.bogdanovmn.badmshot.content;
 
 import com.github.bogdanovmn.badmshot.catalog.PlayerRepository;
+import com.github.bogdanovmn.badmshot.common.FrameFilterConstraints;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,6 +23,7 @@ class ScreenshotService {
     private final PlayerRepository playerRepository;
     private final LastServedFrames lastServedFrames;
     private final ApplicationEventPublisher eventPublisher;
+    private final FrameFilterConstraints filterConstraints;
 
     @Value("${badmshot.top-frames-limit:100}")
     private int topFramesLimit;
@@ -37,6 +39,7 @@ class ScreenshotService {
     @Transactional(readOnly = true)
     ScreenshotCard next(ScreenshotFilter filter, UUID userId) {
         ScreenshotFilter normalized = normalize(filter);
+        filterConstraints.validate(normalized.getPlayers(), normalized.isTogether());
         if (!filter.playersOrEmpty().isEmpty() && normalized.getPlayers().isEmpty()) {
             throw new NoSuchElementException("Кадры не найдены");
         }
@@ -72,6 +75,7 @@ class ScreenshotService {
             .players(playerRepository.canonicalIds(filter.playersOrEmpty()))
             .clubs(filter.clubsOrEmpty())
             .includeIndi(filter.isIncludeIndi())
+            .together(filter.isTogether())
             .build();
     }
 

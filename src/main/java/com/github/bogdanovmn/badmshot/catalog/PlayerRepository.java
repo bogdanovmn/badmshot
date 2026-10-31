@@ -129,6 +129,25 @@ public class PlayerRepository {
     }
 
     public List<Player> search(String term, UUID clubId, int limit) {
+        return search(term, clubId, limit, List.of(), false, false, false);
+    }
+
+    /**
+     * Поиск игроков для формы фильтра.
+     * <p>
+     * {@code availableOnly} оставляет только игроков, у которых есть кадры подходящего
+     * типа. В режиме {@code together} дополнительно требуются общие кадры со всеми
+     * уже выбранными игроками — так нельзя собрать заведомо пустую комбинацию.
+     */
+    public List<Player> search(
+        String term,
+        UUID clubId,
+        int limit,
+        List<UUID> playerIds,
+        boolean together,
+        boolean includeIndi,
+        boolean availableOnly
+    ) {
         String preparedTerm = FullTextQuery.of(term).orElse("");
         String searchTerm = FullTextQuery.normalized(term);
         StringBuilder sql = new StringBuilder(PLAYER_SELECT).append("""
@@ -172,6 +191,52 @@ public class PlayerRepository {
                  )
                 """);
             params.addValue("clubId", clubId);
+        }
+        boolean hasSelectedPlayers = playerIds != null && !playerIds.isEmpty();
+        if (availableOnly || (together && hasSelectedPlayers)) {
+            params.addValue("gamesType", ArchiveType.GAMES.name())
+                .addValue("includeIndi", includeIndi);
+        }
+        if (together && hasSelectedPlayers) {
+            sql.append("""
+                 AND p.id IN (
+                    SELECT DISTINCT coalesce(participant.alias_of_player_id, participant.id)
+                    FROM match_player participant_mp
+                    JOIN player participant ON participant.id = participant_mp.player_id
+                    JOIN match participant_match ON participant_match.id = participant_mp.match_id
+                    WHERE (participant_match.type = :gamesType OR :includeIndi)
+                      AND EXISTS (
+                          SELECT 1 FROM screenshot sc
+                          WHERE sc.match_id = participant_match.id
+                      )
+                      AND participant_match.id IN (
+                          SELECT selected_mp.match_id
+                          FROM match_player selected_mp
+                          JOIN player selected_player ON selected_player.id = selected_mp.player_id
+                          WHERE coalesce(selected_player.alias_of_player_id, selected_player.id) IN (:playerIds)
+                          GROUP BY selected_mp.match_id
+                          HAVING count(DISTINCT coalesce(
+                              selected_player.alias_of_player_id, selected_player.id
+                          )) = :playerIdsCount
+                      )
+                 )
+                """);
+            params.addValue("playerIdsCount", playerIds.size())
+                .addValue("playerIds", playerIds);
+        } else if (availableOnly) {
+            sql.append("""
+                 AND p.id IN (
+                    SELECT DISTINCT coalesce(participant.alias_of_player_id, participant.id)
+                    FROM match_player participant_mp
+                    JOIN player participant ON participant.id = participant_mp.player_id
+                    JOIN match participant_match ON participant_match.id = participant_mp.match_id
+                    WHERE (participant_match.type = :gamesType OR :includeIndi)
+                      AND EXISTS (
+                          SELECT 1 FROM screenshot sc
+                          WHERE sc.match_id = participant_match.id
+                      )
+                 )
+                """);
         }
         if (searchTerm.isEmpty()) {
             sql.append("""
@@ -234,6 +299,105 @@ public class PlayerRepository {
                 .addValue("unprocessed", unprocessedOnly),
             PLAYER_ROW_MAPPER
         );
+    }
+
+    /**
+     * Есть ли у игроков кадры индивидуальных тренировок.
+     * В режиме «вместе» требуется тренировка, где присутствуют все игроки.
+     */
+    public boolean indiAvailable(List<UUID> playerIds, boolean together) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("indiType", ArchiveType.INDI.name());
+        if (playerIds == null || playerIds.isEmpty()) {
+            return Boolean.TRUE.equals(jdbc.queryForObject("""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM match m
+                        WHERE m.type = :indiType
+                          AND EXISTS (SELECT 1 FROM screenshot s WHERE s.match_id = m.id)
+                    )
+                    """,
+                params,
+                Boolean.class
+            ));
+        }
+        params.addValue("playerIds", playerIds);
+        StringBuilder sql = new StringBuilder("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM match m
+                JOIN match_player mp ON mp.match_id = m.id
+                JOIN player p ON p.id = mp.player_id
+                WHERE m.type = :indiType
+                  AND coalesce(p.alias_of_player_id, p.id) IN (:playerIds)
+                  AND EXISTS (SELECT 1 FROM screenshot s WHERE s.match_id = m.id)
+            """);
+        if (together) {
+            sql.append("""
+                  GROUP BY m.id
+                  HAVING count(DISTINCT coalesce(p.alias_of_player_id, p.id)) = :playerIdsCount
+                """);
+            params.addValue("playerIdsCount", playerIds.size());
+        }
+        sql.append(")");
+        return Boolean.TRUE.equals(jdbc.queryForObject(sql.toString(), params, Boolean.class));
+    }
+
+    /**
+     * Есть ли кадры хотя бы у одного из выбранных игроков.
+     * Используется в режиме «любой из игроков».
+     */
+    public boolean anyFramesAvailable(List<UUID> playerIds, boolean includeIndi) {
+        if (playerIds == null || playerIds.isEmpty()) {
+            return true;
+        }
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM match m
+                    JOIN match_player mp ON mp.match_id = m.id
+                    JOIN player p ON p.id = mp.player_id
+                    WHERE (m.type = :gamesType OR :includeIndi)
+                      AND coalesce(p.alias_of_player_id, p.id) IN (:playerIds)
+                      AND EXISTS (SELECT 1 FROM screenshot s WHERE s.match_id = m.id)
+                )
+                """,
+            new MapSqlParameterSource()
+                .addValue("gamesType", ArchiveType.GAMES.name())
+                .addValue("includeIndi", includeIndi)
+                .addValue("playerIds", playerIds),
+            Boolean.class
+        ));
+    }
+
+    /**
+     * Есть ли кадр, в котором присутствуют все выбранные игроки одновременно.
+     * Используется, чтобы не дать включить режим «вместе» для несовместимого набора.
+     */
+    public boolean jointFramesAvailable(List<UUID> playerIds, boolean includeIndi) {
+        if (playerIds == null || playerIds.isEmpty()) {
+            return true;
+        }
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM match m
+                    JOIN match_player mp ON mp.match_id = m.id
+                    JOIN player p ON p.id = mp.player_id
+                    WHERE (m.type = :gamesType OR :includeIndi)
+                      AND coalesce(p.alias_of_player_id, p.id) IN (:playerIds)
+                      AND EXISTS (SELECT 1 FROM screenshot s WHERE s.match_id = m.id)
+                    GROUP BY m.id
+                    HAVING count(DISTINCT coalesce(p.alias_of_player_id, p.id)) = :playerIdsCount
+                )
+                """,
+            new MapSqlParameterSource()
+                .addValue("gamesType", ArchiveType.GAMES.name())
+                .addValue("includeIndi", includeIndi)
+                .addValue("playerIds", playerIds)
+                .addValue("playerIdsCount", playerIds.size()),
+            Boolean.class
+        ));
     }
 
     public List<PlayerLetterCount> letters(boolean unprocessedOnly) {

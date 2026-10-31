@@ -62,6 +62,7 @@ badmshot:
     visitor-salt: ${BADMSHOT_SHARE_VISITOR_SALT:badmshot}
   filters:
     limit: 50
+    max-together-players: 4
 
 server:
   port: 8080

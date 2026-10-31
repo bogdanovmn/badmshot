@@ -12,6 +12,7 @@ class UserFrameFilterRequest {
     List<UUID> playerIds;
     List<UUID> clubIds;
     boolean includeIndi;
+    boolean together;
 
     List<UUID> playersOrEmpty() {
         return playerIds == null ? List.of() : playerIds;
