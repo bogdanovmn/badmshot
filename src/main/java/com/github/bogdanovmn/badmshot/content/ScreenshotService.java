@@ -80,8 +80,11 @@ class ScreenshotService {
     }
 
     @Transactional(readOnly = true)
-    List<ScreenshotCard> top() {
-        return screenshotRepository.topCards(ANONYMOUS_USER, topFramesLimit);
+    List<ScreenshotCard> top(UUID playerId) {
+        UUID canonicalPlayerId = playerId == null
+            ? null
+            : playerRepository.canonicalId(playerId).orElse(playerId);
+        return screenshotRepository.topCards(ANONYMOUS_USER, topFramesLimit, canonicalPlayerId);
     }
 
     @Transactional(readOnly = true)

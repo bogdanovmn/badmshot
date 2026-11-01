@@ -29,6 +29,7 @@ class ArchiveController {
     private final ArchiveSessionService sessionService;
     private final ArchiveExportService exportService;
     private final ArchiveCapabilitiesService capabilitiesService;
+    private final PlayerDossierService playerDossierService;
 
     @GetMapping("/capabilities")
     ResponseEntity<ArchiveCapabilities> capabilities() {
@@ -120,5 +121,10 @@ class ArchiveController {
     @GetMapping("/stats")
     ArchiveStats stats(@RequestParam(name = "type", defaultValue = "GAMES") ArchiveType type) {
         return archiveService.stats(type);
+    }
+
+    @GetMapping("/players/{id}/dossier")
+    PlayerDossier playerDossier(@PathVariable("id") UUID id) {
+        return playerDossierService.dossier(id);
     }
 }

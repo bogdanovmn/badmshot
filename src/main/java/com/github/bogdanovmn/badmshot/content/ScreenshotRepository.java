@@ -329,12 +329,12 @@ public class ScreenshotRepository {
         );
     }
 
-    public List<ScreenshotCard> topCards(UUID userId, int limit) {
-        return cardsByIds(topIds(limit), userId);
+    public List<ScreenshotCard> topCards(UUID userId, int limit, UUID playerId) {
+        return cardsByIds(topIds(limit, playerId), userId);
     }
 
-    public List<UUID> topIds(int limit) {
-        return jdbc.queryForList("""
+    public List<UUID> topIds(int limit, UUID playerId) {
+        StringBuilder sql = new StringBuilder("""
                 WITH like_count AS (
                     SELECT screenshot_id, count(*) AS cnt
                     FROM screenshot_like
@@ -352,23 +352,37 @@ public class ScreenshotRepository {
                 )
                 SELECT s.id
                 FROM screenshot s
+                JOIN match m ON m.id = s.match_id
                 LEFT JOIN like_count lc ON lc.screenshot_id = s.id
                 LEFT JOIN share_count sc ON sc.screenshot_id = s.id
                 LEFT JOIN comment_count cc ON cc.screenshot_id = s.id
-                WHERE coalesce(lc.cnt, 0) > 0
+                WHERE (coalesce(lc.cnt, 0) > 0
                    OR coalesce(sc.cnt, 0) > 0
                    OR coalesce(cc.cnt, 0) > 0
-                   OR s.views > 0
+                   OR s.views > 0)
+                """);
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("limit", limit);
+        if (playerId != null) {
+            sql.append("""
+                   AND m.id IN (
+                       SELECT mp.match_id
+                       FROM match_player mp
+                       JOIN player p ON p.id = mp.player_id
+                       WHERE coalesce(p.alias_of_player_id, p.id) = :playerId
+                   )
+                    """);
+            params.addValue("playerId", playerId);
+        }
+        sql.append("""
                 ORDER BY coalesce(lc.cnt, 0) DESC,
                          coalesce(sc.cnt, 0) DESC,
                          coalesce(cc.cnt, 0) DESC,
                          s.views DESC,
                          s.created_at DESC
                 LIMIT :limit
-                """,
-            Map.of("limit", limit),
-            UUID.class
-        );
+                """);
+        return jdbc.queryForList(sql.toString(), params, UUID.class);
     }
 
     public List<ScreenshotCard> cardsByIds(List<UUID> ids, UUID userId) {

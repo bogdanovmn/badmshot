@@ -49,8 +49,8 @@ class ScreenshotController {
     @GetMapping("/top")
     @PreAuthorize("isAuthenticated()")
     @JsonView(ScreenshotCard.PublicView.class)
-    List<ScreenshotCard> top() {
-        return screenshotService.top();
+    List<ScreenshotCard> top(@RequestParam(name = "playerId", required = false) UUID playerId) {
+        return screenshotService.top(playerId);
     }
 
     @GetMapping("/commented")
