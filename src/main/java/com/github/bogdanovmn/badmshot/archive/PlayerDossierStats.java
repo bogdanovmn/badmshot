@@ -11,4 +11,8 @@ class PlayerDossierStats {
     long sizeMbytes;
     long durationSeconds;
     long screenshotCount;
+    long framesWithLikes;
+    long framesWithShares;
+    long views;
+    long comments;
 }

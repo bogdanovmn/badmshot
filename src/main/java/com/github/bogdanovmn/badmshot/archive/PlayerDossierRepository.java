@@ -36,7 +36,30 @@ class PlayerDossierRepository {
                            SELECT count(*)
                            FROM screenshot s
                            WHERE s.match_id IN (SELECT id FROM player_matches)
-                       ) AS screenshot_count
+                       ) AS screenshot_count,
+                       (
+                           SELECT count(DISTINCT sl.screenshot_id)
+                           FROM screenshot_like sl
+                           JOIN screenshot s ON s.id = sl.screenshot_id
+                           WHERE s.match_id IN (SELECT id FROM player_matches)
+                       ) AS frames_with_likes,
+                       (
+                           SELECT count(DISTINCT ss.screenshot_id)
+                           FROM screenshot_share ss
+                           JOIN screenshot s ON s.id = ss.screenshot_id
+                           WHERE s.match_id IN (SELECT id FROM player_matches)
+                       ) AS frames_with_shares,
+                       (
+                           SELECT coalesce(sum(s.views), 0)
+                           FROM screenshot s
+                           WHERE s.match_id IN (SELECT id FROM player_matches)
+                       ) AS views,
+                       (
+                           SELECT count(*)
+                           FROM screenshot_comment sc
+                           JOIN screenshot s ON s.id = sc.screenshot_id
+                           WHERE s.match_id IN (SELECT id FROM player_matches)
+                       ) AS comments
                 FROM player_matches
                 """,
             params(playerId),
@@ -46,6 +69,10 @@ class PlayerDossierRepository {
                 .sizeMbytes(rs.getLong("size_mbytes"))
                 .durationSeconds(rs.getLong("duration_seconds"))
                 .screenshotCount(rs.getLong("screenshot_count"))
+                .framesWithLikes(rs.getLong("frames_with_likes"))
+                .framesWithShares(rs.getLong("frames_with_shares"))
+                .views(rs.getLong("views"))
+                .comments(rs.getLong("comments"))
                 .build()
         );
     }
