@@ -24,6 +24,7 @@ class PublicSharedFrame {
     String clubName;
     boolean tournament;
     List<String> players;
+    List<UUID> playerIds;
     long likes;
     long shares;
     long comments;
@@ -47,6 +48,7 @@ class PublicSharedFrame {
             .clubName(card.getClubName())
             .tournament(card.isTournament())
             .players(card.getPlayers())
+            .playerIds(card.getPlayerIds())
             .likes(card.getLikes())
             .shares(card.getShares())
             .comments(card.getComments())

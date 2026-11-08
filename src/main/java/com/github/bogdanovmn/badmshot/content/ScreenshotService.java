@@ -8,6 +8,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -114,6 +115,17 @@ class ScreenshotService {
     ScreenshotCard card(UUID id, UUID userId) {
         return screenshotRepository.card(id, userIdOrAnonymous(userId))
             .orElseThrow(() -> new NoSuchElementException("Кадр не найден: " + id));
+    }
+
+    @Transactional(readOnly = true)
+    ScreenshotCard randomForPlayer(UUID playerId, UUID userId) {
+        UUID canonicalId = playerRepository.canonicalId(playerId).orElse(playerId);
+        return screenshotRepository.randomCardForPlayer(
+                canonicalId,
+                userIdOrAnonymous(userId),
+                LocalDate.now().toString()
+            )
+            .orElseThrow(() -> new NoSuchElementException("Кадры игрока не найдены"));
     }
 
     @Transactional(readOnly = true)

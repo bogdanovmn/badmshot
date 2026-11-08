@@ -46,6 +46,21 @@ class ScreenshotController {
         return screenshotService.random(userId);
     }
 
+    /**
+     * Случайный кадр с участием игрока для фона досье. Выбор стабилен в течение
+     * суток, поэтому ответ можно кэшировать на день.
+     */
+    @GetMapping("/random/player/{playerId}")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ScreenshotCard> randomForPlayer(
+        @PathVariable("playerId") UUID playerId,
+        @CurrentUserId UUID userId
+    ) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePrivate())
+            .body(screenshotService.randomForPlayer(playerId, userId));
+    }
+
     @GetMapping("/top")
     @PreAuthorize("isAuthenticated()")
     @JsonView(ScreenshotCard.PublicView.class)

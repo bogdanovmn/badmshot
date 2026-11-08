@@ -55,6 +55,8 @@ class ScreenshotCard {
     @JsonView(PublicView.class)
     List<String> players;
     @JsonView(PublicView.class)
+    List<UUID> playerIds;
+    @JsonView(PublicView.class)
     long likes;
     @JsonView(PublicView.class)
     long shares;

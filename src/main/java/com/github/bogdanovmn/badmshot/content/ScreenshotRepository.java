@@ -51,6 +51,7 @@ public class ScreenshotRepository {
         .clubName(rs.getString("club_name"))
         .tournament(rs.getBoolean("tournament"))
         .players(playerNames(rs))
+        .playerIds(playerIds(rs))
         .likes(rs.getLong("likes"))
         .shares(rs.getLong("shares"))
         .comments(rs.getLong("comments"))
@@ -84,7 +85,9 @@ public class ScreenshotRepository {
                    WHERE l2.screenshot_id = s.id AND l2.user_id = :userId
                ) AS liked,
                array_agg(coalesce(root_player.display_name, root_player.name) ORDER BY mp.position)
-                   FILTER (WHERE root_player.id IS NOT NULL) AS players
+                   FILTER (WHERE root_player.id IS NOT NULL) AS players,
+               array_agg(root_player.id::text ORDER BY mp.position)
+                   FILTER (WHERE root_player.id IS NOT NULL) AS player_ids
         FROM screenshot s
         JOIN match m ON m.id = s.match_id
         JOIN archive_session sess ON sess.id = m.session_id
@@ -244,6 +247,29 @@ public class ScreenshotRepository {
         ServedFrame exclude
     ) {
         return randomId(filter, exclude).flatMap(id -> card(id, userId));
+    }
+
+    /**
+     * Кадр для фона досье игрока. Выбор детерминирован (seed — текущая дата),
+     * поэтому в течение суток пользователь видит одну и ту же картинку.
+     */
+    public Optional<ScreenshotCard> randomCardForPlayer(UUID playerId, UUID userId, String seed) {
+        UUID id = jdbc.queryForList("""
+                SELECT s.id
+                FROM screenshot s
+                JOIN match m ON m.id = s.match_id
+                JOIN match_player mp ON mp.match_id = m.id
+                JOIN player p ON p.id = mp.player_id
+                WHERE coalesce(p.alias_of_player_id, p.id) = :playerId
+                ORDER BY md5(s.id::text || :seed)
+                LIMIT 1
+                """,
+            new MapSqlParameterSource()
+                .addValue("playerId", playerId)
+                .addValue("seed", seed),
+            UUID.class
+        ).stream().findFirst().orElse(null);
+        return id == null ? Optional.empty() : card(id, userId);
     }
 
     private Optional<UUID> randomId(ScreenshotFilter filter, ServedFrame exclude) {
@@ -561,5 +587,16 @@ public class ScreenshotRepository {
         }
         String[] values = (String[]) array.getArray();
         return values == null ? List.of() : Arrays.asList(values);
+    }
+
+    private static List<UUID> playerIds(ResultSet rs) throws SQLException {
+        Array array = rs.getArray("player_ids");
+        if (array == null) {
+            return List.of();
+        }
+        String[] values = (String[]) array.getArray();
+        return values == null
+            ? List.of()
+            : Arrays.stream(values).map(UUID::fromString).toList();
     }
 }

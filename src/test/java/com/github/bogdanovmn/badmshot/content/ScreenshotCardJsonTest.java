@@ -24,6 +24,7 @@ class ScreenshotCardJsonTest {
         .matchId(UUID.randomUUID())
         .imageFormat("jpeg")
         .players(List.of("Игрок"))
+        .playerIds(List.of(UUID.randomUUID()))
         .likes(3)
         .liked(true)
         .views(7)
@@ -38,6 +39,7 @@ class ScreenshotCardJsonTest {
         assertTrue(json.contains("\"likes\":3"));
         assertTrue(json.contains("\"views\":7"));
         assertTrue(json.contains("\"players\":[\"Игрок\"]"));
+        assertTrue(json.contains("\"playerIds\":["));
         assertFalse(json.contains("liked"));
     }
 
